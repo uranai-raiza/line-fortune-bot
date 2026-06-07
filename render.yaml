@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: line-fortune-bot
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: LINE_CHANNEL_ACCESS_TOKEN
+        sync: false
+      - key: LINE_CHANNEL_SECRET
+        sync: false
+      - key: STRIPE_TRIAL_URL
+        sync: false
+      - key: STRIPE_FULL_URL
+        sync: false
