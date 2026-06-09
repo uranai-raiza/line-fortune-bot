@@ -453,7 +453,7 @@ def handle_message(event):
                         ),
                     ]
                 ),
-                ),
+                
             )
 
         elif text == "お試し鑑定希望":
