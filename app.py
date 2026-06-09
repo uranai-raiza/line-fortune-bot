@@ -424,7 +424,7 @@ def handle_message(event):
 
         elif text == "鑑定希望":
             reply = TextMessage(
-                text="鑑定メニューをお選びください✨",
+              text="鑑定メニューをお選びください✨\n（← →スワイプで全プランを確認）",
                quick_reply=QuickReply(
                     items=[
                         QuickReplyItem(
