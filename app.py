@@ -461,7 +461,7 @@ def handle_message(event):
 
         elif text == "レギュラー鑑定希望":
             reply = TextMessage(text=full_message(nickname))
-　　　　 elif text == "ディープ鑑定希望":
+        elif text == "ディープ鑑定希望":
             reply = TextMessage(text=deep_message(nickname))
 
         elif text == "プレミアム鑑定希望":
