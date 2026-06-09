@@ -19,8 +19,10 @@ app = Flask(__name__)
 configuration = Configuration(access_token=os.environ["LINE_CHANNEL_ACCESS_TOKEN"])
 handler = WebhookHandler(os.environ["LINE_CHANNEL_SECRET"])
 
-STRIPE_TRIAL_URL = os.environ.get("STRIPE_TRIAL_URL", "https://buy.stripe.com/＜お試し鑑定のリンクをここに＞")
-STRIPE_FULL_URL  = os.environ.get("STRIPE_FULL_URL",  "https://buy.stripe.com/＜本鑑定のリンクをここに＞")
+STRIPE_TRIAL_URL    = os.environ.get("STRIPE_TRIAL_URL",    "https://buy.stripe.com/6oU7sKcG40bmg9GcsTdMI02")
+STRIPE_REGULAR_URL  = os.environ.get("STRIPE_REGULAR_URL",  "https://buy.stripe.com/5kQaEW49y0bm8He50rdMI03")
+STRIPE_DEEP_URL     = os.environ.get("STRIPE_DEEP_URL",     "https://buy.stripe.com/3cI9AS7lK2ju5v2eB1dMI04")
+STRIPE_PREMIUM_URL  = os.environ.get("STRIPE_PREMIUM_URL",  "https://buy.stripe.com/dRm3cu35u0bmcXuboPdMI05")
 
 FORTUNES = {
     "牡羊座": """\
@@ -353,7 +355,48 @@ def full_message(nickname):
 {STRIPE_FULL_URL}
 
 丁寧に鑑定いたします！"""
+def deep_message(nickname):
+    return f"""✨ 【ディープ】占星術×数秘術鑑定 3,500円 のご案内 ✨
 
+{nickname}さん、ご興味を持っていただきありがとうございます🌸
+
+【内容】
+・3ヶ月の運気の流れ
+・占星術×数秘術で深く読み解く
+・2つのご質問にお答えします
+
+【お申し込み方法】
+①お名前（ニックネーム可）
+②生年月日
+③星座
+④ご相談内容
+
+💳 お支払いはこちら
+{STRIPE_DEEP_URL}
+
+丁寧に鑑定いたします！"""
+
+
+def premium_message(nickname):
+    return f"""✨ 【プレミアム】占星術×数秘術鑑定 5,500円 のご案内 ✨
+
+{nickname}さん、ご興味を持っていただきありがとうございます🌸
+
+【内容】
+・6ヶ月の運気の流れ
+・占星術×数秘術で徹底的に読み解く
+・3つのご質問にお答えします
+
+【お申し込み方法】
+①お名前（ニックネーム可）
+②生年月日
+③星座
+④ご相談内容
+
+💳 お支払いはこちら
+{STRIPE_PREMIUM_URL}
+
+丁寧に鑑定いたします！"""
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -382,30 +425,47 @@ def handle_message(event):
         elif text == "鑑定希望":
             reply = TextMessage(
                 text="鑑定メニューをお選びください✨",
-                quick_reply=QuickReply(
+               quick_reply=QuickReply(
                     items=[
                         QuickReplyItem(
                             action=MessageAction(
-                                label="お試し鑑定 980円",
+                                label="お試し 980円",
                                 text="お試し鑑定希望",
                             )
                         ),
                         QuickReplyItem(
                             action=MessageAction(
-                                label="本鑑定 2,000円",
-                                text="本鑑定希望",
+                                label="レギュラー 2,000円",
+                                text="レギュラー鑑定希望",
+                            )
+                        ),
+                        QuickReplyItem(
+                            action=MessageAction(
+                                label="ディープ 3,500円",
+                                text="ディープ鑑定希望",
+                            )
+                        ),
+                        QuickReplyItem(
+                            action=MessageAction(
+                                label="プレミアム 5,500円",
+                                text="プレミアム鑑定希望",
                             )
                         ),
                     ]
+                ),
                 ),
             )
 
         elif text == "お試し鑑定希望":
             reply = TextMessage(text=trial_message(nickname))
 
-        elif text == "本鑑定希望":
+        elif text == "レギュラー鑑定希望":
             reply = TextMessage(text=full_message(nickname))
+　　　　 elif text == "ディープ鑑定希望":
+            reply = TextMessage(text=deep_message(nickname))
 
+        elif text == "プレミアム鑑定希望":
+            reply = TextMessage(text=premium_message(nickname))
         else:
             reply = TextMessage(text=DEFAULT_MESSAGE)
 
