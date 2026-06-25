@@ -504,9 +504,8 @@ def generate_monitor_fortune(user_info: str, nickname: str) -> str:
 ・全体で500〜800文字程度にまとめる
 ・鑑定文の末尾に以下の文章を必ずそのまま追加してください：
 
-もっと深く知りたい方は、個別鑑定でお伝えできます🔮
-ライザの個別鑑定はこちらから↓
-https://line-fortune-bot-rugv.onrender.com"""
+もっと詳しく鑑定してほしい方は✨
+「鑑定希望」と送ってください🔮"""
 
     try:
         resp = requests.post(
