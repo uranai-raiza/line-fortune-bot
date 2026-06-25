@@ -302,6 +302,24 @@ FORTUNES = {
 あなたの星が、答えを知っています🌠""",
 }
 
+SIGN_ALIASES = {
+    "おひつじ座": "牡羊座",
+    "おうし座":   "牡牛座",
+    "ふたご座":   "双子座",
+    "かに座":     "蟹座",
+    "しし座":     "獅子座",
+    "おとめ座":   "乙女座",
+    "てんびん座": "天秤座",
+    "さそり座":   "蠍座",
+    "いて座":     "射手座",
+    "やぎ座":     "山羊座",
+    "みずがめ座": "水瓶座",
+    "うお座":     "魚座",
+}
+
+SIGN_LOOKUP = {sign: sign for sign in FORTUNES}
+SIGN_LOOKUP.update(SIGN_ALIASES)
+
 DEFAULT_MESSAGE = (
     "星座名（例：牡羊座）を送ると今日の運勢をお伝えします🔮\n"
     "鑑定をご希望の方は「鑑定希望」とお送りください。"
@@ -483,7 +501,7 @@ def handle_message(event):
         profile = line_bot_api.get_profile(user_id=event.source.user_id)
         nickname = profile.display_name
 
-        matched_sign = next((sign for sign in FORTUNES if sign in text), None)
+        matched_sign = next((SIGN_LOOKUP[pat] for pat in SIGN_LOOKUP if pat in text), None)
         if matched_sign:
             reply = TextMessage(text=FORTUNES[matched_sign].format(Nickname=nickname))
 
