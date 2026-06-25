@@ -530,6 +530,19 @@ def handle_message(event):
 
         elif text == "プレミアム鑑定希望":
             reply = TextMessage(text=premium_message(nickname))
+
+        elif text == "モニター希望":
+            reply = TextMessage(text=(
+                "モニター鑑定へのご応募ありがとうございます🌙\n\n"
+                "鑑定のために以下を教えてください✨\n\n"
+                "①お名前（ニックネームで大丈夫です）\n"
+                "②生年月日\n"
+                "③生まれた時間（わからなければ大丈夫です）\n"
+                "④生まれた場所\n"
+                "⑤星座\n"
+                "⑥今一番気になっていること、鑑定で知りたいこと"
+            ))
+
         else:
             reply = TextMessage(text=DEFAULT_MESSAGE)
 
