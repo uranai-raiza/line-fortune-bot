@@ -483,8 +483,9 @@ def handle_message(event):
         profile = line_bot_api.get_profile(user_id=event.source.user_id)
         nickname = profile.display_name
 
-        if text in FORTUNES:
-            reply = TextMessage(text=FORTUNES[text].format(Nickname=nickname))
+        matched_sign = next((sign for sign in FORTUNES if sign in text), None)
+        if matched_sign:
+            reply = TextMessage(text=FORTUNES[matched_sign].format(Nickname=nickname))
 
         elif text == "鑑定希望":
             reply = TextMessage(
