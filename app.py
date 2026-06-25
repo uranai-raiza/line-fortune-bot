@@ -506,7 +506,7 @@ def generate_monitor_fortune(user_info: str, nickname: str) -> str:
 
     try:
         response = gemini_client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-2.5-flash",
             contents=prompt,
         )
         return response.text
