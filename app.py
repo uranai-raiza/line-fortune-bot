@@ -462,14 +462,21 @@ def premium_message(nickname):
 
 丁寧に鑑定いたします！"""
 
+@app.route("/", methods=["GET"])
+def health():
+    return "OK"
+
+
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    signature = request.headers["X-Line-Signature"]
+    signature = request.headers.get("X-Line-Signature", "")
     body = request.get_data(as_text=True)
     try:
         handler.handle(body, signature)
     except InvalidSignatureError:
         abort(400)
+    except Exception:
+        pass
     return "OK"
 
 
@@ -480,8 +487,11 @@ def handle_message(event):
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
 
-        profile = line_bot_api.get_profile(user_id=event.source.user_id)
-        nickname = profile.display_name
+        try:
+            profile = line_bot_api.get_profile(user_id=event.source.user_id)
+            nickname = profile.display_name
+        except Exception:
+            nickname = "あなた"
 
         if text in FORTUNES:
             reply = TextMessage(text=FORTUNES[text].format(Nickname=nickname))
