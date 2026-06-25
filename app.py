@@ -19,7 +19,6 @@ app = Flask(__name__)
 configuration = Configuration(access_token=os.environ["LINE_CHANNEL_ACCESS_TOKEN"])
 handler = WebhookHandler(os.environ["LINE_CHANNEL_SECRET"])
 
-
 STRIPE_TRIAL_URL    = os.environ.get("STRIPE_TRIAL_URL",    "https://buy.stripe.com/6oU7sKcG40bmg9GcsTdMI02")
 STRIPE_REGULAR_URL  = os.environ.get("STRIPE_REGULAR_URL",  "https://buy.stripe.com/5kQaEW49y0bm8He50rdMI03")
 STRIPE_DEEP_URL     = os.environ.get("STRIPE_DEEP_URL",     "https://buy.stripe.com/3cI9AS7lK2ju5v2eB1dMI04")
@@ -303,24 +302,6 @@ FORTUNES = {
 あなたの星が、答えを知っています🌠""",
 }
 
-SIGN_ALIASES = {
-    "おひつじ座": "牡羊座",
-    "おうし座":   "牡牛座",
-    "ふたご座":   "双子座",
-    "かに座":     "蟹座",
-    "しし座":     "獅子座",
-    "おとめ座":   "乙女座",
-    "てんびん座": "天秤座",
-    "さそり座":   "蠍座",
-    "いて座":     "射手座",
-    "やぎ座":     "山羊座",
-    "みずがめ座": "水瓶座",
-    "うお座":     "魚座",
-}
-
-SIGN_LOOKUP = {sign: sign for sign in FORTUNES}
-SIGN_LOOKUP.update(SIGN_ALIASES)
-
 DEFAULT_MESSAGE = (
     "星座名（例：牡羊座）を送ると今日の運勢をお伝えします🔮\n"
     "鑑定をご希望の方は「鑑定希望」とお送りください。"
@@ -481,7 +462,6 @@ def premium_message(nickname):
 
 丁寧に鑑定いたします！"""
 
-
 @app.route("/webhook", methods=["POST"])
 def webhook():
     signature = request.headers["X-Line-Signature"]
@@ -503,10 +483,8 @@ def handle_message(event):
         profile = line_bot_api.get_profile(user_id=event.source.user_id)
         nickname = profile.display_name
 
-        matched_sign = next((SIGN_LOOKUP[pat] for pat in SIGN_LOOKUP if pat in text), None)
-
-        if matched_sign:
-            reply = TextMessage(text=FORTUNES[matched_sign].format(Nickname=nickname))
+        if text in FORTUNES:
+            reply = TextMessage(text=FORTUNES[text].format(Nickname=nickname))
 
         elif text == "鑑定希望":
             reply = TextMessage(
