@@ -1,4 +1,5 @@
 import os
+import requests
 from flask import Flask, request, abort
 from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
@@ -18,6 +19,14 @@ app = Flask(__name__)
 
 configuration = Configuration(access_token=os.environ["LINE_CHANNEL_ACCESS_TOKEN"])
 handler = WebhookHandler(os.environ["LINE_CHANNEL_SECRET"])
+
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_API_URL = (
+    "https://generativelanguage.googleapis.com/v1beta/models"
+    "/gemini-2.0-flash:generateContent"
+)
+
+user_states: dict[str, str] = {}
 
 STRIPE_TRIAL_URL    = os.environ.get("STRIPE_TRIAL_URL",    "https://buy.stripe.com/6oU7sKcG40bmg9GcsTdMI02")
 STRIPE_REGULAR_URL  = os.environ.get("STRIPE_REGULAR_URL",  "https://buy.stripe.com/5kQaEW49y0bm8He50rdMI03")
@@ -480,6 +489,36 @@ def premium_message(nickname):
 
 丁寧に鑑定いたします！"""
 
+def generate_monitor_fortune(user_info: str, nickname: str) -> str:
+    prompt = f"""あなたは占星術師「ライザ」です。以下のモニター応募者の情報をもとに、占星術と数秘術を組み合わせた温かく個人的な鑑定文を日本語で作成してください。
+
+応募者情報：
+{user_info}
+
+以下のルールで鑑定文を書いてください：
+・{nickname}さんへの温かい呼びかけから始める
+・星座と生年月日から読み解く現在の運気と特徴を伝える
+・今一番気になっていることへの具体的なアドバイスを添える
+・前向きで背中を押すメッセージで締める
+・絵文字を適度に使い、LINEで読みやすい形式にする
+・全体で500〜800文字程度にまとめる"""
+
+    try:
+        resp = requests.post(
+            f"{GEMINI_API_URL}?key={GEMINI_API_KEY}",
+            json={"contents": [{"parts": [{"text": prompt}]}]},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+    except Exception:
+        return (
+            f"{nickname}さん、情報をありがとうございます🌙\n\n"
+            "只今、鑑定文の生成中にエラーが発生しました。\n"
+            "少し時間をおいてから再度お試しください🙏"
+        )
+
+
 @app.route("/webhook", methods=["POST"])
 def webhook():
     signature = request.headers["X-Line-Signature"]
@@ -501,8 +540,14 @@ def handle_message(event):
         profile = line_bot_api.get_profile(user_id=event.source.user_id)
         nickname = profile.display_name
 
+        user_id = event.source.user_id
         matched_sign = next((SIGN_LOOKUP[pat] for pat in SIGN_LOOKUP if pat in text), None)
-        if matched_sign:
+
+        if user_states.get(user_id) == "awaiting_monitor_info":
+            user_states.pop(user_id)
+            reply = TextMessage(text=generate_monitor_fortune(text, nickname))
+
+        elif matched_sign:
             reply = TextMessage(text=FORTUNES[matched_sign].format(Nickname=nickname))
 
         elif text == "鑑定希望":
@@ -551,6 +596,7 @@ def handle_message(event):
             reply = TextMessage(text=premium_message(nickname))
 
         elif text == "モニター希望":
+            user_states[user_id] = "awaiting_monitor_info"
             reply = TextMessage(text=(
                 "モニター鑑定へのご応募ありがとうございます🌙\n\n"
                 "鑑定のために以下を教えてください✨\n\n"
