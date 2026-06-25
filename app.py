@@ -1,5 +1,5 @@
 import os
-import requests
+from google import genai
 from flask import Flask, request, abort
 from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
@@ -21,10 +21,7 @@ configuration = Configuration(access_token=os.environ["LINE_CHANNEL_ACCESS_TOKEN
 handler = WebhookHandler(os.environ["LINE_CHANNEL_SECRET"])
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_API_URL = (
-    "https://generativelanguage.googleapis.com/v1beta/models"
-    "/gemini-2.0-flash:generateContent"
-)
+gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 
 user_states: dict[str, str] = {}
 
@@ -508,14 +505,13 @@ def generate_monitor_fortune(user_info: str, nickname: str) -> str:
 「鑑定希望」と送ってください🔮"""
 
     try:
-        resp = requests.post(
-            f"{GEMINI_API_URL}?key={GEMINI_API_KEY}",
-            json={"contents": [{"parts": [{"text": prompt}]}]},
-            timeout=30,
+        response = gemini_client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=prompt,
         )
-        resp.raise_for_status()
-        return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
-    except Exception:
+        return response.text
+    except Exception as e:
+        print(f"[Gemini error] {e}")
         return (
             f"{nickname}さん、情報をありがとうございます🌙\n\n"
             "只今、鑑定文の生成中にエラーが発生しました。\n"
