@@ -24,6 +24,21 @@ STRIPE_REGULAR_URL  = os.environ.get("STRIPE_REGULAR_URL",  "https://buy.stripe.
 STRIPE_DEEP_URL     = os.environ.get("STRIPE_DEEP_URL",     "https://buy.stripe.com/3cI9AS7lK2ju5v2eB1dMI04")
 STRIPE_PREMIUM_URL  = os.environ.get("STRIPE_PREMIUM_URL",  "https://buy.stripe.com/dRm3cu35u0bmcXuboPdMI05")
 
+ZODIAC_ALIASES = {
+    "おひつじ座": "牡羊座", "おひつじ": "牡羊座",
+    "おうし座": "牡牛座", "おうし": "牡牛座",
+    "ふたご座": "双子座", "ふたご": "双子座",
+    "かに座": "蟹座", "かに": "蟹座",
+    "しし座": "獅子座", "しし": "獅子座",
+    "おとめ座": "乙女座", "おとめ": "乙女座",
+    "てんびん座": "天秤座", "てんびん": "天秤座",
+    "さそり座": "蠍座", "さそり": "蠍座",
+    "いて座": "射手座", "いて": "射手座",
+    "やぎ座": "山羊座", "やぎ": "山羊座",
+    "みずがめ座": "水瓶座", "みずがめ": "水瓶座",
+    "うお座": "魚座", "うお": "魚座",
+}
+
 FORTUNES = {
     "牡羊座": """\
 🌸{Nickname}さん🌸
@@ -303,7 +318,7 @@ FORTUNES = {
 }
 
 DEFAULT_MESSAGE = (
-    "星座名（例：牡羊座）を送ると今日の運勢をお伝えします🔮\n"
+    "星座名（例：牡羊座、やぎ座）を送ると今日の運勢をお伝えします🔮\n"
     "鑑定をご希望の方は「鑑定希望」とお送りください。"
 )
 
@@ -365,7 +380,7 @@ def full_message(nickname):
 ④ご相談内容
 
 💳 お支払いはこちら
-{STRIPE_TRIAL_URL}
+{STRIPE_REGULAR_URL}
 
 ✅ お支払い完了後、以下をこのトークにお送りください
 
@@ -385,6 +400,8 @@ def full_message(nickname):
 ⑥「ご相談内容」（聞きたいこと）
 
 丁寧に鑑定いたします！"""
+
+
 def deep_message(nickname):
     return f"""✨ 【ディープ】占星術×数秘術鑑定 3,500円 のご案内 ✨
 
@@ -402,7 +419,7 @@ def deep_message(nickname):
 ④ご相談内容
 
 💳 お支払いはこちら
-{STRIPE_TRIAL_URL}
+{STRIPE_DEEP_URL}
 
 ✅ お支払い完了後、以下をこのトークにお送りください
 
@@ -441,7 +458,7 @@ def premium_message(nickname):
 ④ご相談内容
 
 💳 お支払いはこちら
-{STRIPE_TRIAL_URL}
+{STRIPE_PREMIUM_URL}
 
 ✅ お支払い完了後、以下をこのトークにお送りください
 
@@ -461,6 +478,7 @@ def premium_message(nickname):
 ⑥「ご相談内容」（聞きたいこと）
 
 丁寧に鑑定いたします！"""
+
 
 @app.route("/", methods=["GET"])
 def health():
@@ -484,6 +502,18 @@ def webhook():
 def handle_message(event):
     text = event.message.text.strip()
 
+    # 部分一致で星座を検出（漢字・ひらがな・文章対応）
+    matched_zodiac = None
+    for zodiac in FORTUNES:
+        if zodiac in text:
+            matched_zodiac = zodiac
+            break
+    if not matched_zodiac:
+        for alias, zodiac in ZODIAC_ALIASES.items():
+            if alias in text:
+                matched_zodiac = zodiac
+                break
+
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
 
@@ -493,41 +523,17 @@ def handle_message(event):
         except Exception:
             nickname = "あなた"
 
-        if text in FORTUNES:
-            reply = TextMessage(text=FORTUNES[text].format(Nickname=nickname))
-
-        elif text == "鑑定希望":
+        if text == "鑑定希望":
             reply = TextMessage(
-              text="ここまで来てくださったということは、今何か心に引っかかっていることがあるんじゃないかな、と感じています。うまくいかない恋愛のこと、先が見えない不安、誰にも言えないモヤモヤ。そのまま抱えていかなくていいです。星の動きと、あなたが生まれ持った数字が交差する場所に、今のあなたへの答えが宿っています。私ライザが、あなただけの言葉でお伝えします。\n\n鑑定メニューをお選びください✨\n（← →スワイプで全プランを確認）",
-               quick_reply=QuickReply(
+                text="ここまで来てくださったということは、今何か心に引っかかっていることがあるんじゃないかな、と感じています。うまくいかない恋愛のこと、先が見えない不安、誰にも言えないモヤモヤ。そのまま抱えていかなくていいです。星の動きと、あなたが生まれ持った数字が交差する場所に、今のあなたへの答えが宿っています。私ライザが、あなただけの言葉でお伝えします。\n\n鑑定メニューをお選びください✨\n（← →スワイプで全プランを確認）",
+                quick_reply=QuickReply(
                     items=[
-                        QuickReplyItem(
-                            action=MessageAction(
-                                label="お試し 980円",
-                                text="お試し鑑定希望",
-                            )
-                        ),
-                        QuickReplyItem(
-                            action=MessageAction(
-                                label="レギュラー 2,000円",
-                                text="レギュラー鑑定希望",
-                            )
-                        ),
-                        QuickReplyItem(
-                            action=MessageAction(
-                                label="ディープ 3,500円",
-                                text="ディープ鑑定希望",
-                            )
-                        ),
-                        QuickReplyItem(
-                            action=MessageAction(
-                                label="プレミアム 5,500円",
-                                text="プレミアム鑑定希望",
-                            )
-                        ),
+                        QuickReplyItem(action=MessageAction(label="お試し 980円", text="お試し鑑定希望")),
+                        QuickReplyItem(action=MessageAction(label="レギュラー 2,000円", text="レギュラー鑑定希望")),
+                        QuickReplyItem(action=MessageAction(label="ディープ 3,500円", text="ディープ鑑定希望")),
+                        QuickReplyItem(action=MessageAction(label="プレミアム 5,500円", text="プレミアム鑑定希望")),
                     ]
                 ),
-                
             )
 
         elif text == "お試し鑑定希望":
@@ -535,6 +541,7 @@ def handle_message(event):
 
         elif text == "レギュラー鑑定希望":
             reply = TextMessage(text=full_message(nickname))
+
         elif text == "ディープ鑑定希望":
             reply = TextMessage(text=deep_message(nickname))
 
@@ -552,6 +559,9 @@ def handle_message(event):
                 "⑤星座\n"
                 "⑥今一番気になっていること、鑑定で知りたいこと"
             ))
+
+        elif matched_zodiac:
+            reply = TextMessage(text=FORTUNES[matched_zodiac].format(Nickname=nickname))
 
         else:
             reply = TextMessage(text=DEFAULT_MESSAGE)
