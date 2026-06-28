@@ -19,7 +19,7 @@ app = Flask(__name__)
 configuration = Configuration(access_token=os.environ["LINE_CHANNEL_ACCESS_TOKEN"])
 handler = WebhookHandler(os.environ["LINE_CHANNEL_SECRET"])
 
-STRIPE_TRIAL_URL    = os.environ.get("STRIPE_TRIAL_URL",    "https://buy.stripe.com/6oU7sKcG40bmg9GcsTdMI02")
+STRIPE_TRIAL_URL    = "https://buy.stripe.com/6oU7sKcG40bmg9GcsTdMI02"
 STRIPE_REGULAR_URL  = os.environ.get("STRIPE_REGULAR_URL",  "https://buy.stripe.com/5kQaEW49y0bm8He50rdMI03")
 STRIPE_DEEP_URL     = os.environ.get("STRIPE_DEEP_URL",     "https://buy.stripe.com/3cI9AS7lK2ju5v2eB1dMI04")
 STRIPE_PREMIUM_URL  = os.environ.get("STRIPE_PREMIUM_URL",  "https://buy.stripe.com/dRm3cu35u0bmcXuboPdMI05")
