@@ -10,6 +10,6 @@ services:
       - key: LINE_CHANNEL_SECRET
         sync: false
       - key: STRIPE_TRIAL_URL
-        sync: false
+        value: https://buy.stripe.com/6oU7sKcG40bmg9GcsTdMI02
       - key: STRIPE_FULL_URL
         sync: false
