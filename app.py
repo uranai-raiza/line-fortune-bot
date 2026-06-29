@@ -523,7 +523,19 @@ def handle_message(event):
         except Exception:
             nickname = "あなた"
 
-        if text == "鑑定希望" or any(kw in text for kw in ["鑑定", "お願い", "見てほしい", "見て欲しい", "占って", "相談"]):
+        if text == "お試し鑑定希望":
+            reply = TextMessage(text=trial_message(nickname))
+
+        elif text == "レギュラー鑑定希望":
+            reply = TextMessage(text=full_message(nickname))
+
+        elif text == "ディープ鑑定希望":
+            reply = TextMessage(text=deep_message(nickname))
+
+        elif text == "プレミアム鑑定希望":
+            reply = TextMessage(text=premium_message(nickname))
+
+        elif text == "鑑定希望" or any(kw in text for kw in ["鑑定", "お願い", "見てほしい", "見て欲しい", "占って", "相談"]):
             reply = TextMessage(
                 text="ここまで来てくださったということは、今何か心に引っかかっていることがあるんじゃないかな、と感じています。うまくいかない恋愛のこと、先が見えない不安、誰にも言えないモヤモヤ。そのまま抱えていかなくていいです。星の動きと、あなたが生まれ持った数字が交差する場所に、今のあなたへの答えが宿っています。私ライザが、あなただけの言葉でお伝えします。\n\n鑑定メニューをお選びください✨\n（← →スワイプで全プランを確認）",
                 quick_reply=QuickReply(
@@ -535,18 +547,6 @@ def handle_message(event):
                     ]
                 ),
             )
-
-        elif text == "お試し鑑定希望":
-            reply = TextMessage(text=trial_message(nickname))
-
-        elif text == "レギュラー鑑定希望":
-            reply = TextMessage(text=full_message(nickname))
-
-        elif text == "ディープ鑑定希望":
-            reply = TextMessage(text=deep_message(nickname))
-
-        elif text == "プレミアム鑑定希望":
-            reply = TextMessage(text=premium_message(nickname))
 
         elif text == "モニター希望":
             reply = TextMessage(text=(
