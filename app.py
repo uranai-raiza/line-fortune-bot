@@ -20,9 +20,8 @@ configuration = Configuration(access_token=os.environ["LINE_CHANNEL_ACCESS_TOKEN
 handler = WebhookHandler(os.environ["LINE_CHANNEL_SECRET"])
 
 STRIPE_TRIAL_URL    = "https://buy.stripe.com/6oU7sKcG40bmg9GcsTdMI02"
-STRIPE_REGULAR_URL  = os.environ.get("STRIPE_REGULAR_URL",  "https://buy.stripe.com/5kQaEW49y0bm8He50rdMI03")
-STRIPE_DEEP_URL     = os.environ.get("STRIPE_DEEP_URL",     "https://buy.stripe.com/3cI9AS7lK2ju5v2eB1dMI04")
-STRIPE_PREMIUM_URL  = os.environ.get("STRIPE_PREMIUM_URL",  "https://buy.stripe.com/dRm3cu35u0bmcXuboPdMI05")
+STRIPE_STANDARD_URL = os.environ.get("STRIPE_STANDARD_URL", "https://buy.stripe.com/5kQaEW49y0bm8He50rdMI03")
+STRIPE_PREMIUM_URL  = os.environ.get("STRIPE_PREMIUM_URL",  "https://buy.stripe.com/3cI9AS7lK2ju5v2eB1dMI04")
 
 ZODIAC_ALIASES = {
     "おひつじ座": "牡羊座", "おひつじ": "牡羊座",
@@ -332,6 +331,8 @@ def trial_message(nickname):
 ・現在の運気の流れ
 ・近い将来の運勢
 ・アドバイスメッセージ
+・1つのご質問にお答えします
+・1,500文字程度
 
 【お申し込み方法】
 以下のリンクからお支払いください。
@@ -363,54 +364,15 @@ def trial_message(nickname):
 丁寧に鑑定いたします！"""
 
 
-def full_message(nickname):
-    return f"""✨ 【レギュラー】パーソナル星座鑑定 2,000円 のご案内 ✨
+def standard_message(nickname):
+    return f"""✨ 【スタンダード】パーソナル星座鑑定 2,000円 のご案内 ✨
 
 {nickname}さん、ご興味を持っていただきありがとうございます🌸
 
 【内容】
-・1ヶ月の運勢を星座占いで詳しくお伝えします
-・1つのご質問にお答えします
-・1,000文字程度
-
-【お申し込み方法】
-①お名前（ニックネーム可）
-②生年月日
-③星座
-④ご相談内容
-
-💳 お支払いはこちら
-{STRIPE_REGULAR_URL}
-
-✅ お支払い完了後、以下をこのトークにお送りください
-
-【ご本人】
-①お名前（ニックネーム可）
-②生年月日
-③出生時間（わかれば）
-④星座
-
-【お相手】
-①お名前（ニックネーム可）
-②生年月日
-③出生時間（わかれば）
-④星座
-
-⑤「現在の状況」（お相手との関係、現在どんな状況か）
-⑥「ご相談内容」（聞きたいこと）
-
-丁寧に鑑定いたします！"""
-
-
-def deep_message(nickname):
-    return f"""✨ 【ディープ】占星術×数秘術鑑定 3,500円 のご案内 ✨
-
-{nickname}さん、ご興味を持っていただきありがとうございます🌸
-
-【内容】
-・3ヶ月の運気の流れ
-・占星術×数秘術で深く読み解く
+・占星術×数秘術でじっくり読み解く
 ・2つのご質問にお答えします
+・2,500文字程度
 
 【お申し込み方法】
 ①お名前（ニックネーム可）
@@ -419,7 +381,7 @@ def deep_message(nickname):
 ④ご相談内容
 
 💳 お支払いはこちら
-{STRIPE_DEEP_URL}
+{STRIPE_STANDARD_URL}
 
 ✅ お支払い完了後、以下をこのトークにお送りください
 
@@ -442,14 +404,15 @@ def deep_message(nickname):
 
 
 def premium_message(nickname):
-    return f"""✨ 【プレミアム】占星術×数秘術鑑定 5,500円 のご案内 ✨
+    return f"""✨ 【プレミアム】占星術×数秘術鑑定 3,000円 のご案内 ✨
 
 {nickname}さん、ご興味を持っていただきありがとうございます🌸
 
 【内容】
-・6ヶ月の運気の流れ
-・占星術×数秘術で徹底的に読み解く
+・3ヶ月の運気の流れ
+・占星術×数秘術で深く読み解く
 ・3つのご質問にお答えします
+・3,500文字程度
 
 【お申し込み方法】
 ①お名前（ニックネーム可）
@@ -526,24 +489,27 @@ def handle_message(event):
         if text == "お試し鑑定希望":
             reply = TextMessage(text=trial_message(nickname))
 
-        elif text == "レギュラー鑑定希望":
-            reply = TextMessage(text=full_message(nickname))
-
-        elif text == "ディープ鑑定希望":
-            reply = TextMessage(text=deep_message(nickname))
+        elif text == "スタンダード鑑定希望":
+            reply = TextMessage(text=standard_message(nickname))
 
         elif text == "プレミアム鑑定希望":
             reply = TextMessage(text=premium_message(nickname))
 
         elif text == "鑑定希望" or any(kw in text for kw in ["鑑定", "お願い", "見てほしい", "見て欲しい", "占って", "相談"]):
             reply = TextMessage(
-                text="鑑定のご希望ありがとうございます。下記にあるお試し鑑定は現在のあなたと状況、レギュラーは向こう1ヶ月のあなたと状況、ディープは向こう3か月のあなたと状況、プレミアムは向こう6か月のあなたと状況を、それぞれご質問内容に沿って、星の動きと、あなたが持つ数字で丁寧に読み解きます。ご希望のコースをお選びください。（← →スワイプで全プランを確認）",
+                text=(
+                    "鑑定のご希望ありがとうございます。お試しは今のあなたとお相手の状況、スタンダードは向こう1ヶ月のあなたとお相手の状況、プレミアムは向こう3か月のあなたとお相手の状況を、それぞれご質問内容に沿って、星の動きと、あなたが持つ数字で丁寧に読み解きます。\n"
+                    "・お試し：質問1つ／1,500文字\n"
+                    "・スタンダード：質問2つ／2,500文字\n"
+                    "・プレミアム：質問3つ／3,500文字\n"
+                    "※これ以上の期間をご希望の場合は別途ご相談ください。\n"
+                    "ご希望のコースをお選びください。"
+                ),
                 quick_reply=QuickReply(
                     items=[
                         QuickReplyItem(action=MessageAction(label="お試し 980円", text="お試し鑑定希望")),
-                        QuickReplyItem(action=MessageAction(label="レギュラー 2,000円", text="レギュラー鑑定希望")),
-                        QuickReplyItem(action=MessageAction(label="ディープ 3,500円", text="ディープ鑑定希望")),
-                        QuickReplyItem(action=MessageAction(label="プレミアム 5,500円", text="プレミアム鑑定希望")),
+                        QuickReplyItem(action=MessageAction(label="スタンダード 2,000円", text="スタンダード鑑定希望")),
+                        QuickReplyItem(action=MessageAction(label="プレミアム 3,000円", text="プレミアム鑑定希望")),
                     ]
                 ),
             )
