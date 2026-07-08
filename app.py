@@ -21,7 +21,7 @@ handler = WebhookHandler(os.environ["LINE_CHANNEL_SECRET"])
 
 STRIPE_TRIAL_URL    = "https://buy.stripe.com/6oU7sKcG40bmg9GcsTdMI02"
 STRIPE_STANDARD_URL = os.environ.get("STRIPE_STANDARD_URL", "https://buy.stripe.com/5kQaEW49y0bm8He50rdMI03")
-STRIPE_PREMIUM_URL  = os.environ.get("STRIPE_PREMIUM_URL",  "https://buy.stripe.com/3cI9AS7lK2ju5v2eB1dMI04")
+STRIPE_PREMIUM_URL  = os.environ.get("STRIPE_PREMIUM_URL",  "https://buy.stripe.com/aFa9AS6hG0bmaPmakLdMI06")
 
 ZODIAC_ALIASES = {
     "おひつじ座": "牡羊座", "おひつじ": "牡羊座",
