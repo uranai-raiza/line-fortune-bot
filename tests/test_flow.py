@@ -113,8 +113,11 @@ class FlowTests(unittest.TestCase):
         product_data = kwargs["line_items"][0]["price_data"]["product_data"]
         self.assertEqual(product_data["name"], "【スタンダード】パーソナル星座鑑定")
         for expected in (
-            "向こう1ヶ月の運勢を占星術×数秘術で詳しく読み解きます。",
-            "ご質問2つにお答えします。",
+            "気になるお相手の本音と、この恋が進む可能性",
+            "相手があなたに見せていない本音",
+            "今は連絡するべきか、待つべきか",
+            "ご質問2つに、約2,500文字",
+            "相手の気持ちと次の一歩を、まとめて確かめたい方",
         ):
             self.assertIn(expected, product_data["description"])
         self.assertNotIn("【ご注意事項】", product_data["description"])
