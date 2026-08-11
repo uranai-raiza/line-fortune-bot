@@ -14,9 +14,9 @@ from google.oauth2.service_account import Credentials
 JST = timezone(timedelta(hours=9))
 
 PLANS = {
-    "trial": {"label": "お試し鑑定", "amount": 980, "questions": 1, "characters": "約1,500文字"},
-    "standard": {"label": "スタンダード鑑定", "amount": 2000, "questions": 2, "characters": "約2,500文字"},
-    "premium": {"label": "プレミアム鑑定", "amount": 3000, "questions": 3, "characters": "約3,500文字"},
+    "trial": {"label": "お試し鑑定", "amount": 980, "questions": 1, "characters": "約1,500文字", "description": "質問1つ／約1,500文字\nまず一つだけ答えを知りたい方へ"},
+    "standard": {"label": "スタンダード鑑定", "amount": 2000, "questions": 2, "characters": "約2,500文字", "description": "質問2つ／約2,500文字\n相手の本音と今後の流れを知りたい方へ"},
+    "premium": {"label": "プレミアム鑑定", "amount": 3000, "questions": 3, "characters": "約3,500文字", "description": "質問3つ／約3,500文字\n復縁・複雑な恋などを深く知りたい方へ"},
 }
 
 SHEET_HEADERS = [
@@ -112,7 +112,7 @@ def create_checkout_session(course, line_user_id, display_name, base_url):
             "price_data": {
                 "currency": "jpy",
                 "unit_amount": plan["amount"],
-                "product_data": {"name": plan["label"]},
+                "product_data": {"name": plan["label"], "description": plan["description"]},
             },
             "quantity": 1,
         }],

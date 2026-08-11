@@ -107,6 +107,10 @@ class FlowTests(unittest.TestCase):
         self.assertNotIn("payment_method_types", kwargs)
         self.assertEqual(kwargs["metadata"]["course"], "standard")
         self.assertEqual(kwargs["metadata"]["line_user_id"], "U123456")
+        self.assertEqual(
+            kwargs["line_items"][0]["price_data"]["product_data"]["description"],
+            "質問2つ／約2,500文字\n相手の本音と今後の流れを知りたい方へ",
+        )
         self.assertIn("{CHECKOUT_SESSION_ID}", kwargs["success_url"])
 
     def test_input_template_contains_required_warning_and_fields(self):
