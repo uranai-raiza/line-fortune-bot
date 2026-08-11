@@ -13,3 +13,21 @@ services:
         value: https://buy.stripe.com/6oU7sKcG40bmg9GcsTdMI02
       - key: STRIPE_FULL_URL
         sync: false
+      - key: STRIPE_RESTRICTED_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: CHECKOUT_TOKEN_SECRET
+        sync: false
+      - key: FORM_TOKEN_SECRET
+        sync: false
+      - key: GOOGLE_SHEET_ID
+        sync: false
+      - key: GOOGLE_WORKSHEET_NAME
+        value: 鑑定管理
+      - key: GOOGLE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: ADMIN_LINE_USER_ID
+        sync: false

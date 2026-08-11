@@ -1,0 +1,5 @@
+<!doctype html>
+<html lang="ja">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>受付完了｜占いライザ</title><link rel="stylesheet" href="{{ url_for('static', filename='intake.css') }}"></head>
+<body><main class="page-shell compact"><section class="completion"><p class="completion-mark" aria-hidden="true">✓</p><p class="eyebrow">占いライザ</p><h1>{{ title }}</h1><p>{{ message }}</p><p class="reference">Stripe決済番号<br><strong>{{ session_id }}</strong></p><p>内容とお支払い状況を確認後、完成予定日をご連絡します。</p></section></main></body>
+</html>

@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>鑑定情報入力｜占いライザ</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='intake.css') }}">
+</head>
+<body>
+  <main class="page-shell">
+    <header class="page-header">
+      <p class="eyebrow">占いライザ　決済済みのお客様専用</p>
+      <h1>鑑定情報入力</h1>
+      <div class="order-summary" aria-label="お申し込み内容">
+        <span>{{ plan.label }}</span>
+        <strong>{{ "{:,}".format(plan.amount) }}円</strong>
+        <span>質問{{ plan.questions }}つ／{{ plan.characters }}</span>
+      </div>
+    </header>
+
+    <section class="notice" aria-labelledby="notice-title">
+      <h2 id="notice-title">必ずご確認ください</h2>
+      <p>正確な鑑定書を作成するため、すべての項目をご入力ください。</p>
+      <p><strong>記入漏れがある場合は鑑定を行うことができません。</strong></p>
+      <p>分からない項目は空欄にせず「不明」と入力してください。</p>
+    </section>
+
+    {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
+
+    <form method="post" novalidate>
+      <input type="hidden" name="session_id" value="{{ session_id }}">
+      <input type="hidden" name="form_token" value="{{ form_token }}">
+
+      <fieldset>
+        <legend><span>01</span> ご本人について</legend>
+        <div class="field-grid">
+          <label>お名前（ニックネーム可）<input name="customer_name" value="{{ values.get('customer_name', '') }}" required autocomplete="name"></label>
+          <label>生年月日<input type="date" name="customer_birth_date" value="{{ values.get('customer_birth_date', '') }}" required></label>
+          <label>出生時間<input name="customer_birth_time" value="{{ values.get('customer_birth_time', '') }}" placeholder="例：10:30／不明" required></label>
+          <label>出生地<input name="customer_birth_place" value="{{ values.get('customer_birth_place', '') }}" placeholder="例：大阪府大阪市／不明" required></label>
+          <label>星座<select name="customer_zodiac" required><option value="">選択してください</option>{% for zodiac in zodiacs %}<option value="{{ zodiac }}" {% if values.get('customer_zodiac') == zodiac %}selected{% endif %}>{{ zodiac }}</option>{% endfor %}</select></label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend><span>02</span> お相手について</legend>
+        <p class="hint">分からない項目は「不明」と入力してください。</p>
+        <div class="field-grid">
+          <label>お相手のお名前<input name="partner_name" value="{{ values.get('partner_name', '') }}" required></label>
+          <label>お相手の生年月日<input name="partner_birth_date" value="{{ values.get('partner_birth_date', '') }}" placeholder="例：1991/02/02／不明" required></label>
+          <label>お相手の出生時間<input name="partner_birth_time" value="{{ values.get('partner_birth_time', '') }}" placeholder="例：18:00／不明" required></label>
+          <label>お相手の出生地<input name="partner_birth_place" value="{{ values.get('partner_birth_place', '') }}" placeholder="例：兵庫県神戸市／不明" required></label>
+          <label>お相手の星座<select name="partner_zodiac" required><option value="">選択してください</option><option value="不明" {% if values.get('partner_zodiac') == '不明' %}selected{% endif %}>不明</option>{% for zodiac in zodiacs %}<option value="{{ zodiac }}" {% if values.get('partner_zodiac') == zodiac %}selected{% endif %}>{{ zodiac }}</option>{% endfor %}</select></label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend><span>03</span> 現在の状況</legend>
+        <label>現在の関係<input name="relationship" value="{{ values.get('relationship', '') }}" placeholder="例：片思い、交際中、復縁希望" required></label>
+        <label>現在どのような状況ですか<textarea name="situation" rows="6" required>{{ values.get('situation', '') }}</textarea></label>
+      </fieldset>
+
+      <fieldset>
+        <legend><span>04</span> 鑑定で聞きたいこと</legend>
+        <p class="hint">{{ plan.label }}では、質問を{{ plan.questions }}つご入力ください。</p>
+        {% for i in range(1, plan.questions + 1) %}<label>質問{{ i }}<textarea name="question_{{ i }}" rows="4" required>{{ values.get('question_' ~ i, '') }}</textarea></label>{% endfor %}
+      </fieldset>
+
+      <fieldset class="confirmations">
+        <legend><span>05</span> 送信前の確認</legend>
+        <label class="check"><input type="checkbox" name="consent_accuracy" value="yes" {% if values.get('consent_accuracy') %}checked{% endif %} required>入力内容に間違いがなく、記入漏れがないことを確認しました。</label>
+        <label class="check"><input type="checkbox" name="consent_privacy" value="yes" {% if values.get('consent_privacy') %}checked{% endif %} required>鑑定書作成に必要な範囲で、入力した情報が使用されることに同意します。</label>
+      </fieldset>
+
+      <button type="submit">鑑定情報を送信する</button>
+      <p class="footer-note">送信後の変更が必要な場合は、占いライザ公式LINEへご連絡ください。</p>
+    </form>
+  </main>
+</body>
+</html>
