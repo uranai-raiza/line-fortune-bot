@@ -112,11 +112,18 @@ class FlowTests(unittest.TestCase):
         for expected in (
             "向こう1ヶ月の運勢を占星術×数秘術で詳しく読み解きます。",
             "ご質問2つにお答えします。",
+        ):
+            self.assertIn(expected, product_data["description"])
+        self.assertNotIn("【ご注意事項】", product_data["description"])
+        submit_message = kwargs["custom_text"]["submit"]["message"]
+        self.assertLessEqual(len(submit_message), 1200)
+        for expected in (
+            "【ご利用前にご確認ください】",
             "鑑定結果のお届けまで2〜5日いただきます",
             "鑑定結果はこのトークにて【PDF】でお送りします",
             "お支払いをもって、上記注意事項すべてにご同意いただいたものとみなします。",
         ):
-            self.assertIn(expected, product_data["description"])
+            self.assertIn(expected, submit_message)
         self.assertIn("{CHECKOUT_SESSION_ID}", kwargs["success_url"])
 
     def test_input_template_contains_required_warning_and_fields(self):

@@ -37,7 +37,7 @@ PLANS = {
 ・次に取るべき小さな一歩
 
 ご質問1つにお答えします。
-1,500文字程度でお届けします。""" + "\n\n" + CHECKOUT_NOTICE,
+1,500文字程度でお届けします。""",
     },
     "standard": {
         "label": "スタンダード鑑定", "checkout_name": "【スタンダード】パーソナル星座鑑定",
@@ -48,7 +48,7 @@ PLANS = {
 ・今月、動くべきか待つべきかの方向性
 
 ご質問2つにお答えします。
-2,500文字程度でお届けします。""" + "\n\n" + CHECKOUT_NOTICE,
+2,500文字程度でお届けします。""",
     },
     "premium": {
         "label": "プレミアム鑑定", "checkout_name": "【プレミアム】占星術×数秘術鑑定",
@@ -59,7 +59,7 @@ PLANS = {
 ・数秘術で導く「動くべき具体的な日」まで提示
 
 ご質問3つにお答えします。
-3,500文字程度でお届けします。""" + "\n\n" + CHECKOUT_NOTICE,
+3,500文字程度でお届けします。""",
     },
 }
 
@@ -160,6 +160,11 @@ def create_checkout_session(course, line_user_id, display_name, base_url):
             },
             "quantity": 1,
         }],
+        custom_text={
+            "submit": {
+                "message": "【ご利用前にご確認ください】\n" + CHECKOUT_NOTICE,
+            },
+        },
         success_url=f"{base_url}/intake?session_id={{CHECKOUT_SESSION_ID}}",
         cancel_url=f"{base_url}/checkout/cancelled",
         client_reference_id=reference,
