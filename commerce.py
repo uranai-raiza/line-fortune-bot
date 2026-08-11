@@ -51,7 +51,7 @@ PLANS = {
     },
     "premium": {
         "label": "プレミアム鑑定", "checkout_name": "【プレミアム】占星術×数秘術鑑定",
-        "amount": 3000, "questions": 3, "characters": "約3,500文字",
+        "amount": 6000, "questions": 3, "characters": "約3,500文字",
         "description": """気になるお相手の本音、この恋が進む可能性、そして今あなたが動くべき時期を、占星術と数秘術から深く読み解きます。
 ◆ 相手が表に出していない本音
 ◆ 二人の関係が動く今後3ヶ月の流れ

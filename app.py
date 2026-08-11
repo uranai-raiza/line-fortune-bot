@@ -1,5 +1,6 @@
 import os
 import unicodedata
+from datetime import datetime, timedelta, timezone
 from flask import Flask, request, abort, redirect, render_template
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from linebot.v3 import WebhookHandler
@@ -352,6 +353,36 @@ FORTUNES = {
 ───────────────""",
 }
 
+
+JST = timezone(timedelta(hours=9))
+
+# 外部APIを待たず、日付と星座の組み合わせで毎日切り替える恋愛運。
+# 同じ日の再訪では同じ内容になり、翌日は次の内容へ進む。
+DAILY_LOVE_THEMES = [
+    "今日は、答えを急ぐより相手の言葉と行動を静かに見比べたい日です。小さな違和感をごまかさず、自分が安心できる関係かを確かめてください。夜には、相手の本心につながるヒントが見えてきそうです。",
+    "今日は、素直なひと言が止まっていた恋の空気を変えやすい日です。長い説明より、相手を気遣う短い連絡が心の距離を縮めます。ただし返事を急かさず、相手が考える時間も大切にしてください。",
+    "今日は、過去の不安より、これから築きたい関係へ意識を向けると流れが整います。相手の反応だけで自分の価値を決めず、あなたが望む恋の形を言葉にしてみてください。次の一歩が明確になります。",
+    "今日は、相手の優しさを期待だけで判断せず、継続した行動に注目したい日です。約束を守るか、あなたの都合も大切にするかが、ご縁を見極める手がかりになります。焦らず事実を見てください。",
+    "今日は、少し勇気を出して自分から流れを作ることで、恋が動きやすくなります。連絡するなら重い結論を求めず、自然に会話を始められる話題を選んでください。あなたらしい明るさが相手の心をやわらげます。",
+    "今日は、追いかけるより自分の時間を満たすことが恋の運気を整えます。相手中心になっていた気持ちを戻すと、二人の関係を冷静に見られるようになります。心に余白ができたとき、相手の反応にも変化が現れそうです。",
+    "今日は、曖昧な関係に小さな区切りをつけるのに向いています。答えを迫るのではなく、自分がどう感じているかを穏やかに伝えてください。本音を隠さない姿勢が、続くご縁と手放すべき迷いを分けてくれます。",
+]
+
+
+def build_fortune_message(zodiac, nickname, now=None):
+    """日付と星座に応じた日替わり部分を、既存の星座鑑定へ追加する。"""
+    current = now or datetime.now(JST)
+    local_date = current.astimezone(JST).date()
+    zodiac_index = list(FORTUNES).index(zodiac)
+    theme_index = (local_date.toordinal() + zodiac_index) % len(DAILY_LOVE_THEMES)
+    daily_section = (
+        f"🌙 {local_date.month}月{local_date.day}日の恋愛運\n\n"
+        f"{DAILY_LOVE_THEMES[theme_index]}\n\n"
+    )
+    marker = f"ここまでは、{zodiac}が本来持つ恋愛傾向と運勢です。"
+    base = FORTUNES[zodiac].format(Nickname=nickname)
+    return base.replace(marker, daily_section + marker, 1)
+
 DEFAULT_MESSAGE = (
     "星座名（例：牡羊座、やぎ座）を送ると今日の運勢をお伝えします🔮\n"
     "鑑定をご希望の方は「鑑定希望」とお送りください。"
@@ -372,7 +403,7 @@ COURSE_MENU_TEXT = """気になるお相手の本音、
 質問2つ／約2,500文字
 相手の本音と今後の流れを知りたい方へ
 
-💎 プレミアム鑑定　3,000円
+💎 プレミアム鑑定　6,000円
 質問3つ／約3,500文字
 復縁・複雑な恋などを深く知りたい方へ
 
@@ -421,7 +452,7 @@ def course_quick_reply(line_user_id, display_name, only_course=None):
     labels = {
         "trial": "お試し 980円",
         "standard": "スタンダード 2,000円",
-        "premium": "プレミアム 3,000円",
+        "premium": "プレミアム 6,000円",
     }
     base_url = public_base_url()
     return QuickReply(items=[
@@ -546,7 +577,7 @@ def standard_message(nickname):
 
 
 def premium_message(nickname):
-    return f"""✨ 【プレミアム】占星術×数秘術鑑定 3,000円 のご案内 ✨
+    return f"""✨ 【プレミアム】占星術×数秘術鑑定 6,000円 のご案内 ✨
 
 {nickname}さん、ご興味を持っていただきありがとうございます🌸
 
@@ -816,7 +847,7 @@ def handle_message(event):
 
         elif matched_zodiac:
             reply = TextMessage(
-                text=FORTUNES[matched_zodiac].format(Nickname=nickname) + "\n\n" + COURSE_MENU_TEXT,
+                text=build_fortune_message(matched_zodiac, nickname) + "\n\n" + COURSE_MENU_TEXT,
                 quick_reply=course_quick_reply(line_user_id, nickname),
             )
 

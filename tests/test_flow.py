@@ -1,6 +1,7 @@
 import os
 import sys
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -56,6 +57,26 @@ class FlowTests(unittest.TestCase):
             self.assertGreaterEqual(len(fortune), 400, zodiac)
             message = fortune.format(Nickname="友だちの表示名") + "\n\n" + app.COURSE_MENU_TEXT
             self.assertLessEqual(len(message), 5000, zodiac)
+
+    def test_daily_fortune_changes_by_day_but_not_within_same_day(self):
+        jst = timezone(timedelta(hours=9))
+        morning = datetime(2026, 8, 11, 8, 0, tzinfo=jst)
+        evening = datetime(2026, 8, 11, 22, 0, tzinfo=jst)
+        tomorrow = datetime(2026, 8, 12, 8, 0, tzinfo=jst)
+        message = app.build_fortune_message("山羊座", "Aさん", morning)
+        self.assertEqual(message, app.build_fortune_message("山羊座", "Aさん", evening))
+        self.assertNotEqual(message, app.build_fortune_message("山羊座", "Aさん", tomorrow))
+        self.assertIn("🌙 8月11日の恋愛運", message)
+        self.assertIn("ここまでは、山羊座が本来持つ恋愛傾向と運勢です。", message)
+        self.assertLessEqual(len(message + "\n\n" + app.COURSE_MENU_TEXT), 5000)
+
+    def test_premium_price_is_consistent(self):
+        self.assertEqual(PLANS["premium"]["amount"], 6000)
+        self.assertIn("プレミアム鑑定　6,000円", app.COURSE_MENU_TEXT)
+        quick_reply = app.course_quick_reply("U1", "表示名")
+        self.assertEqual(quick_reply.items[2].action.label, "プレミアム 6,000円")
+        with patch.object(app, "STRIPE_PREMIUM_URL", "https://stripe.test/premium", create=True):
+            self.assertIn("6,000円", app.premium_message("表示名"))
 
     def test_sheet_starts_with_requested_customer_columns(self):
         self.assertEqual(SHEET_HEADERS[:12], [
