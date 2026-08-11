@@ -13,10 +13,54 @@ from google.oauth2.service_account import Credentials
 
 JST = timezone(timedelta(hours=9))
 
+CHECKOUT_NOTICE = """※20歳未満の方のご利用はお断りしております。
+
+【ご注意事項】
+・お支払い確認後、鑑定を開始します
+・鑑定結果のお届けまで2〜5日いただきます
+・鑑定結果はこのトークにて【PDF】でお送りします
+・返金・キャンセルは相談内容の送信後はお受けできません
+・個人情報は鑑定目的以外には使用しません
+・本鑑定はスピリチュアルな観点からのメッセージをお伝えするものです。医療・法律・投資などに関するご相談や、特定の行動を強制・保証するものではございません。
+・ギャンブルの勝敗・結果に関するご相談はお受けできません
+・生死に関わるご相談（病気の予後・寿命など）はお受けできません。
+
+🌟 お支払いをもって、上記注意事項すべてにご同意いただいたものとみなします。"""
+
 PLANS = {
-    "trial": {"label": "お試し鑑定", "amount": 980, "questions": 1, "characters": "約1,500文字", "description": "質問1つ／約1,500文字\nまず一つだけ答えを知りたい方へ"},
-    "standard": {"label": "スタンダード鑑定", "amount": 2000, "questions": 2, "characters": "約2,500文字", "description": "質問2つ／約2,500文字\n相手の本音と今後の流れを知りたい方へ"},
-    "premium": {"label": "プレミアム鑑定", "amount": 3000, "questions": 3, "characters": "約3,500文字", "description": "質問3つ／約3,500文字\n復縁・複雑な恋などを深く知りたい方へ"},
+    "trial": {
+        "label": "お試し鑑定", "checkout_name": "【初回限定】お試し星座占い鑑定",
+        "amount": 980, "questions": 1, "characters": "約1,500文字",
+        "description": """現在のあなたの運勢を占星術×数秘術で読み解きます。
+・今のあなたに起きている流れの意味
+・気になっていることへの答え
+・次に取るべき小さな一歩
+
+ご質問1つにお答えします。
+1,500文字程度でお届けします。""" + "\n\n" + CHECKOUT_NOTICE,
+    },
+    "standard": {
+        "label": "スタンダード鑑定", "checkout_name": "【スタンダード】パーソナル星座鑑定",
+        "amount": 2000, "questions": 2, "characters": "約2,500文字",
+        "description": """向こう1ヶ月の運勢を占星術×数秘術で詳しく読み解きます。
+・1ヶ月の流れと転機のタイミング
+・気になる相手や状況の本当の意味
+・今月、動くべきか待つべきかの方向性
+
+ご質問2つにお答えします。
+2,500文字程度でお届けします。""" + "\n\n" + CHECKOUT_NOTICE,
+    },
+    "premium": {
+        "label": "プレミアム鑑定", "checkout_name": "【プレミアム】占星術×数秘術鑑定",
+        "amount": 3000, "questions": 3, "characters": "約3,500文字",
+        "description": """向こう3ヶ月の運勢を占星術×数秘術で深く読み解きます。
+・3ヶ月間の運気の波と重要な転換点
+・相手との関係やご縁の本質
+・数秘術で導く「動くべき具体的な日」まで提示
+
+ご質問3つにお答えします。
+3,500文字程度でお届けします。""" + "\n\n" + CHECKOUT_NOTICE,
+    },
 }
 
 SHEET_HEADERS = [
@@ -112,7 +156,7 @@ def create_checkout_session(course, line_user_id, display_name, base_url):
             "price_data": {
                 "currency": "jpy",
                 "unit_amount": plan["amount"],
-                "product_data": {"name": plan["label"], "description": plan["description"]},
+                "product_data": {"name": plan["checkout_name"], "description": plan["description"]},
             },
             "quantity": 1,
         }],

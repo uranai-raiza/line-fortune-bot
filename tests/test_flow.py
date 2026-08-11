@@ -107,10 +107,16 @@ class FlowTests(unittest.TestCase):
         self.assertNotIn("payment_method_types", kwargs)
         self.assertEqual(kwargs["metadata"]["course"], "standard")
         self.assertEqual(kwargs["metadata"]["line_user_id"], "U123456")
-        self.assertEqual(
-            kwargs["line_items"][0]["price_data"]["product_data"]["description"],
-            "質問2つ／約2,500文字\n相手の本音と今後の流れを知りたい方へ",
-        )
+        product_data = kwargs["line_items"][0]["price_data"]["product_data"]
+        self.assertEqual(product_data["name"], "【スタンダード】パーソナル星座鑑定")
+        for expected in (
+            "向こう1ヶ月の運勢を占星術×数秘術で詳しく読み解きます。",
+            "ご質問2つにお答えします。",
+            "鑑定結果のお届けまで2〜5日いただきます",
+            "鑑定結果はこのトークにて【PDF】でお送りします",
+            "お支払いをもって、上記注意事項すべてにご同意いただいたものとみなします。",
+        ):
+            self.assertIn(expected, product_data["description"])
         self.assertIn("{CHECKOUT_SESSION_ID}", kwargs["success_url"])
 
     def test_input_template_contains_required_warning_and_fields(self):
