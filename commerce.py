@@ -64,9 +64,10 @@ def now_iso():
 
 
 def _fernet():
-    secret = os.environ.get("CHECKOUT_TOKEN_SECRET", "")
+    secret = os.environ.get("CHECKOUT_TOKEN_SECRET") or os.environ.get("LINE_CHANNEL_SECRET", "")
     if not secret:
-        raise RuntimeError("CHECKOUT_TOKEN_SECRET が設定されていません")
+        raise RuntimeError("LINE_CHANNEL_SECRET が設定されていません")
+    secret = f"checkout:{secret}"
     key = base64.urlsafe_b64encode(hashlib.sha256(secret.encode("utf-8")).digest())
     return Fernet(key)
 
@@ -96,7 +97,7 @@ def configure_stripe():
     if not api_key:
         raise RuntimeError("STRIPE_RESTRICTED_KEY が設定されていません")
     stripe.api_key = api_key
-    stripe.api_version = "2026-06-24.dahlia"
+    stripe.api_version = "2026-07-29.dahlia"
 
 
 def create_checkout_session(course, line_user_id, display_name, base_url):

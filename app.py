@@ -374,9 +374,10 @@ def course_quick_reply(line_user_id, display_name, only_course=None):
 
 
 def form_serializer():
-    secret = os.environ.get("FORM_TOKEN_SECRET", "")
+    secret = os.environ.get("FORM_TOKEN_SECRET") or os.environ.get("LINE_CHANNEL_SECRET", "")
     if not secret:
-        raise RuntimeError("FORM_TOKEN_SECRET が設定されていません")
+        raise RuntimeError("LINE_CHANNEL_SECRET が設定されていません")
+    secret = f"intake:{secret}"
     return URLSafeTimedSerializer(secret, salt="raiza-intake")
 
 
@@ -692,6 +693,16 @@ def webhook():
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
     text = event.message.text.strip()
+
+    if text == "管理者ID確認":
+        with ApiClient(configuration) as api_client:
+            MessagingApi(api_client).reply_message(
+                ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[TextMessage(text=f"あなたのLINE識別番号です。\n{event.source.user_id}")],
+                )
+            )
+        return
 
     # 部分一致で星座を検出（漢字・ひらがな・文章対応）
     matched_zodiac = None
