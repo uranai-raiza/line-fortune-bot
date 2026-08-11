@@ -51,6 +51,9 @@ class FlowTests(unittest.TestCase):
     def test_all_plan_messages_fit_line_text_limit(self):
         for zodiac, fortune in app.FORTUNES.items():
             self.assertNotIn("鑑定希望」と送ってください", fortune, zodiac)
+            self.assertIn(f"ここまでは、{zodiac}が本来持つ恋愛傾向と運勢です。", fortune, zodiac)
+            self.assertIn("相手の本音と、この恋を動かす時期", fortune, zodiac)
+            self.assertGreaterEqual(len(fortune), 400, zodiac)
             message = fortune.format(Nickname="友だちの表示名") + "\n\n" + app.COURSE_MENU_TEXT
             self.assertLessEqual(len(message), 5000, zodiac)
 
