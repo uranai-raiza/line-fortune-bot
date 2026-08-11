@@ -756,7 +756,7 @@ def handle_message(event):
 
         elif matched_zodiac:
             reply = TextMessage(
-                text=FORTUNES[matched_zodiac].format(Nickname=nickname) + "\n\n───────────────\n\n" + COURSE_MENU_TEXT,
+                text=FORTUNES[matched_zodiac].format(Nickname=nickname) + "\n\n" + COURSE_MENU_TEXT,
                 quick_reply=course_quick_reply(line_user_id, nickname),
             )
 
