@@ -837,7 +837,7 @@ def webhook():
     except InvalidSignatureError:
         abort(400)
     except Exception:
-        pass
+        app.logger.exception("webhook handling failed")
     return "OK"
 
 
