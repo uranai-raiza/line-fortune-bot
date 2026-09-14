@@ -233,11 +233,8 @@ class SheetsStore:
             raise RuntimeError("スプレッドシートの見出しが設計と一致していません")
 
     def _find_row(self, session_id):
-        try:
-            cell = self.worksheet.find(session_id, in_column=1)
-            return cell.row
-        except gspread.CellNotFound:
-            return None
+        cell = self.worksheet.find(session_id, in_column=1)
+        return cell.row if cell else None
 
     def get_order(self, session_id):
         row = self._find_row(session_id)
@@ -364,11 +361,8 @@ class StepProgressStore:
             self.worksheet.update([STEP_SHEET_HEADERS], "A1")
 
     def _find_row(self, line_user_id):
-        try:
-            cell = self.worksheet.find(line_user_id, in_column=1)
-            return cell.row
-        except gspread.CellNotFound:
-            return None
+        cell = self.worksheet.find(line_user_id, in_column=1)
+        return cell.row if cell else None
 
     def get_stage(self, line_user_id):
         row = self._find_row(line_user_id)
