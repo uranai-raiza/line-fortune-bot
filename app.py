@@ -21,6 +21,7 @@ from linebot.v3.webhooks import MessageEvent, TextMessageContent
 from commerce import (
     PLANS,
     SheetsStore,
+    StepProgressStore,
     create_checkout_session,
     create_checkout_token,
     read_checkout_token,
@@ -415,6 +416,65 @@ COURSE_MENU_TEXT = """気になるお相手の本音、
 といった2つの悩みをまとめて確認できます。
 
 ご希望のコースをお選びください✨"""
+
+CONTINUE_PROMPT = "\n\n続きが気になる方は「続き」と送ってください🌙"
+
+STEP_MESSAGES = {
+    # 1通目（無料鑑定）の直後に「続き」と送った人へ
+    1: (
+        "{nickname}さん🌙\n\n"
+        "いつも占いライザをフォローしてくださり\n"
+        "ありがとうございます✨\n\n"
+        "改めまして、占星術×数秘術で\n"
+        "恋愛のご相談を鑑定している RAIZA です🔮\n\n"
+        "「あの人の本音が知りたい」\n"
+        "「この恋がどうなるのか気になる」\n\n"
+        "そんな声を日々たくさんいただいていて、\n"
+        "これまで星座別の動画を70本以上お届けしてきました。\n\n"
+        "次は、鑑定でどこまで深く読み解けるのか、\n"
+        "もう少し詳しくお話ししますね🌸"
+        + CONTINUE_PROMPT
+    ),
+    # 2通目の直後に「続き」と送った人へ
+    2: (
+        "{nickname}さん🌙\n\n"
+        "占星術と数秘術を組み合わせた鑑定では、\n"
+        "星座診断だけではわからない\n\n"
+        "・お相手が今、本当はどう思っているか\n"
+        "・二人の関係が動き出す時期\n"
+        "・あなたが今とるべき行動\n\n"
+        "まで、お二人の生年月日から読み解いていきます✨\n\n"
+        "実際に鑑定を受けた方からは、\n"
+        "こんなメッセージをいただいています🌸\n\n"
+        "―――――――――\n"
+        "「迷っていた時期に、進む方向をやさしく\n"
+        "示してもらえました。何度も読み返しています。」\n"
+        "（40代・女性）\n\n"
+        "「星の説明がとても具体的で、これまでの\n"
+        "出来事にも納得できました。」\n"
+        "（20代・女性）\n"
+        "―――――――――\n\n"
+        "「なんとなくの占い」ではなく、\n"
+        "あなたとお相手、お二人の星の配置をもとに\n"
+        "一つひとつお答えする鑑定です🌙\n\n"
+        "次は、初めての方向けのご案内をお送りしますね💫"
+        + CONTINUE_PROMPT
+    ),
+}
+
+
+def continue_offer_message(nickname):
+    return (
+        f"{nickname}さん🌙\n\n"
+        "ここまで読んでくださりありがとうございます✨\n\n"
+        "もしよければ、まずは気軽な\n"
+        "「お試し鑑定　980円」から\n"
+        "試してみませんか？🔮\n\n"
+        "・質問1つにお答えします\n"
+        "・約1,500文字でしっかりお伝えします\n"
+        "・気になっていることを1つ、深く読み解きます\n\n"
+        "下のボタンからお申し込みいただけます💳"
+    )
 
 
 def normalized_text(text):
@@ -846,10 +906,23 @@ def handle_message(event):
             ))
 
         elif matched_zodiac:
-            reply = TextMessage(
-                text=build_fortune_message(matched_zodiac, nickname) + "\n\n" + COURSE_MENU_TEXT,
-                quick_reply=course_quick_reply(line_user_id, nickname),
-            )
+            # 無料鑑定に有料メニューを即同梱しない（無料→信頼構築→提案の順にするため）。
+            # 続きは「続き」キーワードで本人のペースで進めてもらう（応答メッセージのみなので無料）。
+            reply = TextMessage(text=build_fortune_message(matched_zodiac, nickname) + CONTINUE_PROMPT)
+
+        elif normalized_text(text) == "続き":
+            stage = StepProgressStore().advance_stage(line_user_id)
+            if stage in STEP_MESSAGES:
+                reply = TextMessage(text=STEP_MESSAGES[stage].format(nickname=nickname))
+            elif stage == len(STEP_MESSAGES) + 1:
+                reply = TextMessage(
+                    text=continue_offer_message(nickname),
+                    quick_reply=course_quick_reply(line_user_id, nickname, "trial"),
+                )
+            else:
+                reply = TextMessage(
+                    text="すでにご案内はお送りしています🌙\nご興味があれば、いつでも「鑑定希望」と送ってくださいね✨"
+                )
 
         elif is_paid_consultation_request(text):
             reply = TextMessage(

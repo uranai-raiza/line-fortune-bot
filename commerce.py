@@ -330,6 +330,70 @@ class SheetsStore:
         self.worksheet.update([values], f"A{row_number}:{end_column}{row_number}")
 
 
+STEP_SHEET_HEADERS = ["LINE識別番号", "現在の段階", "更新日時"]
+
+
+class StepProgressStore:
+    """「続き」キーワードで進む無料ステップ配信の進行状況を保存する。"""
+
+    _lock = threading.Lock()
+
+    def __init__(self):
+        sheet_id = os.environ.get("GOOGLE_SHEET_ID", "")
+        credentials_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "")
+        worksheet_name = os.environ.get("GOOGLE_STEP_WORKSHEET_NAME", "ステップ進行")
+        if not sheet_id or not credentials_json:
+            raise RuntimeError("Googleスプレッドシートの設定が不足しています")
+        info = json.loads(credentials_json)
+        credentials = Credentials.from_service_account_info(
+            info,
+            scopes=["https://www.googleapis.com/auth/spreadsheets"],
+        )
+        client = gspread.authorize(credentials)
+        spreadsheet = client.open_by_key(sheet_id)
+        try:
+            self.worksheet = spreadsheet.worksheet(worksheet_name)
+        except gspread.WorksheetNotFound:
+            self.worksheet = spreadsheet.add_worksheet(
+                title=worksheet_name,
+                rows=1000,
+                cols=len(STEP_SHEET_HEADERS),
+            )
+        current = self.worksheet.row_values(1)
+        if not current:
+            self.worksheet.update([STEP_SHEET_HEADERS], "A1")
+
+    def _find_row(self, line_user_id):
+        try:
+            cell = self.worksheet.find(line_user_id, in_column=1)
+            return cell.row
+        except gspread.CellNotFound:
+            return None
+
+    def get_stage(self, line_user_id):
+        row = self._find_row(line_user_id)
+        if not row:
+            return 0
+        values = self.worksheet.row_values(row)
+        try:
+            return int(values[1])
+        except (IndexError, ValueError):
+            return 0
+
+    def advance_stage(self, line_user_id):
+        with self._lock:
+            stage = self.get_stage(line_user_id) + 1
+            row = self._find_row(line_user_id)
+            if row:
+                self.worksheet.update([[line_user_id, stage, now_iso()]], f"A{row}:C{row}")
+            else:
+                self.worksheet.append_row(
+                    [line_user_id, stage, now_iso()],
+                    value_input_option=gspread.utils.ValueInputOption.user_entered,
+                )
+            return stage
+
+
 def validate_intake(form, question_count):
     required = [
         "customer_name",
