@@ -46,6 +46,14 @@ class FlowTests(unittest.TestCase):
             with self.subTest(sample=sample):
                 self.assertFalse(app.is_daily_fortune_question(sample))
 
+    def test_continue_request_is_detected(self):
+        for sample in ["続き", "つづき", " 続き ", "続きを見たい", "続きをお願いします"]:
+            with self.subTest(sample=sample):
+                self.assertTrue(app.is_continue_request(sample))
+        for sample in ["こんにちは", "牡羊座", "鑑定希望", "続きが気になるので私の恋愛について詳しく鑑定してほしいです"]:
+            with self.subTest(sample=sample):
+                self.assertFalse(app.is_continue_request(sample))
+
     def test_apply_how_question_is_detected(self):
         for sample in ["本鑑定はどこで？", "鑑定ってどうやって申し込むの", "鑑定を申込みたいです"]:
             with self.subTest(sample=sample):

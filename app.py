@@ -528,6 +528,12 @@ def is_paid_consultation_request(text):
     return any(marker in compact for marker in ("鑑定希望", "有料鑑定", "本鑑定", "鑑定をお願い", "相談したい"))
 
 
+def is_continue_request(text):
+    """「続き」「つづき」「続きを見たい」など、短い続き要求か判定する。"""
+    compact = normalized_text(text)
+    return len(compact) <= 10 and ("続き" in compact or "つづき" in compact)
+
+
 def is_daily_fortune_question(text):
     """「毎日恋愛運は聞けますか？」のような、毎日の運勢についての質問か判定する。"""
     compact = normalized_text(text)
@@ -958,7 +964,7 @@ def handle_message(event):
             # 続きは「続き」キーワードで本人のペースで進めてもらう（応答メッセージのみなので無料）。
             reply = TextMessage(text=build_fortune_message(matched_zodiac, nickname) + CONTINUE_PROMPT)
 
-        elif normalized_text(text) == "続き":
+        elif is_continue_request(text):
             stage = StepProgressStore().advance_stage(line_user_id)
             if stage in STEP_MESSAGES:
                 reply = TextMessage(text=STEP_MESSAGES[stage].format(nickname=nickname))
@@ -969,7 +975,13 @@ def handle_message(event):
                 )
             else:
                 reply = TextMessage(
-                    text="すでにご案内はお送りしています🌙\nご興味があれば、いつでも「鑑定希望」と送ってくださいね✨"
+                    text=(
+                        "ご案内はここまでです🌙\n\n"
+                        "お相手の本音や、恋が動く時期を知りたいときは、\n"
+                        "下のボタンから、そのままお申し込みできます✨\n"
+                        "迷われる方には、スタンダード鑑定（2,000円）がおすすめです。"
+                    ),
+                    quick_reply=course_quick_reply(line_user_id, nickname),
                 )
 
         elif is_daily_fortune_question(text):
