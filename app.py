@@ -540,7 +540,7 @@ def is_daily_fortune_question(text):
     if is_paid_consultation_request(text):
         return False
     daily_markers = ("毎日", "まいにち", "日替わり", "日がわり", "毎朝")
-    fortune_markers = ("恋愛運", "運勢", "運", "占い", "占って", "みて", "見て", "聞け", "知りたい")
+    fortune_markers = ("恋愛運", "運勢", "占って", "聞け", "見れ", "知りたい", "もらえ", "できま")
     return any(m in compact for m in daily_markers) and any(m in compact for m in fortune_markers)
 
 

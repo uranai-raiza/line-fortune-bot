@@ -42,7 +42,7 @@ class FlowTests(unittest.TestCase):
         for sample in ["毎日恋愛運は聞けますか？", "毎日占ってもらえますか", "毎日の運勢って見れますか"]:
             with self.subTest(sample=sample):
                 self.assertTrue(app.is_daily_fortune_question(sample))
-        for sample in ["鑑定希望", "毎日鑑定希望", "こんにちは", "牡羊座"]:
+        for sample in ["鑑定希望", "毎日鑑定希望", "こんにちは", "牡羊座", "毎日見てます", "毎日動画見てます", "毎日占い見てます"]:
             with self.subTest(sample=sample):
                 self.assertFalse(app.is_daily_fortune_question(sample))
 
