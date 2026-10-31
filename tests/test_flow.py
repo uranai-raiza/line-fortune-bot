@@ -38,6 +38,27 @@ class FlowTests(unittest.TestCase):
         self.assertFalse(app.is_free_reading_request("無料ではなく通常の鑑定をお願いします"))
         self.assertTrue(app.is_paid_consultation_request("スタンダードの鑑定をお願いしたい"))
 
+    def test_daily_fortune_question_is_detected(self):
+        for sample in ["毎日恋愛運は聞けますか？", "毎日占ってもらえますか", "毎日の運勢って見れますか"]:
+            with self.subTest(sample=sample):
+                self.assertTrue(app.is_daily_fortune_question(sample))
+        for sample in ["鑑定希望", "毎日鑑定希望", "こんにちは", "牡羊座"]:
+            with self.subTest(sample=sample):
+                self.assertFalse(app.is_daily_fortune_question(sample))
+
+    def test_apply_how_question_is_detected(self):
+        for sample in ["本鑑定はどこで？", "鑑定ってどうやって申し込むの", "鑑定を申込みたいです"]:
+            with self.subTest(sample=sample):
+                self.assertTrue(app.is_apply_how_question(sample))
+        for sample in ["毎日恋愛運は聞けますか？", "こんにちは", "鑑定希望"]:
+            with self.subTest(sample=sample):
+                self.assertFalse(app.is_apply_how_question(sample))
+
+    def test_new_replies_fit_limit_and_state_the_answer(self):
+        self.assertTrue(app.DAILY_FORTUNE_REPLY.startswith("はい、毎日お聞きいただけます"))
+        self.assertLessEqual(len(app.APPLY_LEAD_TEXT + app.COURSE_MENU_TEXT), 5000)
+        self.assertIn("このLINEでそのまま", app.DEFAULT_MESSAGE)
+
     def test_zodiac_aliases_remain_partial_match_capable(self):
         text = "私はみずがめ座です。無料ではなく通常の運勢をお願いします"
         self.assertIn("みずがめ座", text)

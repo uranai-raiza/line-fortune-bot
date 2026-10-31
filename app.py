@@ -385,8 +385,31 @@ def build_fortune_message(zodiac, nickname, now=None):
     return base.replace(marker, daily_section + marker, 1)
 
 DEFAULT_MESSAGE = (
-    "星座名（例：牡羊座、やぎ座）を送ると今日の運勢をお伝えします🔮\n"
-    "鑑定をご希望の方は「鑑定希望」とお送りください。"
+    "メッセージありがとうございます🌙\n\n"
+    "🔮 今日の恋愛運を知りたい方\n"
+    "星座名（例：牡羊座、やぎ座）を送ってください。\n"
+    "日付ごとに内容が変わるので、毎日送っていただけます✨\n\n"
+    "💎 お相手の本音や、恋が動く時期を知りたい方\n"
+    "「鑑定希望」と送ってください。\n"
+    "このLINEでそのままお申し込みできます🌙"
+)
+
+DAILY_FORTUNE_REPLY = (
+    "はい、毎日お聞きいただけます🌙\n\n"
+    "星座名（例：やぎ座）を送ってください。\n"
+    "その日の恋愛運を、日付ごとに変えてお伝えします🔮\n"
+    "毎日送っていただければ、毎日違う恋愛運が届きます✨\n\n"
+    "さらに、\n"
+    "「相手は私をどう思っている？」\n"
+    "「この恋はいつ動く？」\n"
+    "のように、あなたとお相手だけの答えを知りたいときは、\n"
+    "「鑑定希望」と送ってください💎\n"
+    "このLINEでそのままお申し込みできます🌙"
+)
+
+APPLY_LEAD_TEXT = (
+    "本鑑定は、このLINEでそのままお申し込みできます🌙\n"
+    "下のボタンを押すと、お支払いへ進めます✨\n\n"
 )
 
 
@@ -501,6 +524,25 @@ def is_free_reading_request(text):
 def is_paid_consultation_request(text):
     compact = normalized_text(text)
     return any(marker in compact for marker in ("鑑定希望", "有料鑑定", "本鑑定", "鑑定をお願い", "相談したい"))
+
+
+def is_daily_fortune_question(text):
+    """「毎日恋愛運は聞けますか？」のような、毎日の運勢についての質問か判定する。"""
+    compact = normalized_text(text)
+    if is_paid_consultation_request(text):
+        return False
+    daily_markers = ("毎日", "まいにち", "日替わり", "日がわり", "毎朝")
+    fortune_markers = ("恋愛運", "運勢", "運", "占い", "占って", "みて", "見て", "聞け", "知りたい")
+    return any(m in compact for m in daily_markers) and any(m in compact for m in fortune_markers)
+
+
+def is_apply_how_question(text):
+    """本鑑定の申し込み方法・場所についての質問か判定する。"""
+    compact = normalized_text(text)
+    if "鑑定" not in compact:
+        return False
+    markers = ("どこで", "どこから", "どこに", "どうやって", "どう申", "どうしたら", "申し込", "申込", "受けるには", "受けたい", "頼みたい")
+    return any(m in compact for m in markers)
 
 
 def public_base_url():
@@ -927,6 +969,15 @@ def handle_message(event):
                 reply = TextMessage(
                     text="すでにご案内はお送りしています🌙\nご興味があれば、いつでも「鑑定希望」と送ってくださいね✨"
                 )
+
+        elif is_daily_fortune_question(text):
+            reply = TextMessage(text=DAILY_FORTUNE_REPLY)
+
+        elif is_apply_how_question(text):
+            reply = TextMessage(
+                text=APPLY_LEAD_TEXT + COURSE_MENU_TEXT,
+                quick_reply=course_quick_reply(line_user_id, nickname),
+            )
 
         elif is_paid_consultation_request(text):
             reply = TextMessage(
