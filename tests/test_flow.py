@@ -70,6 +70,12 @@ class FlowTests(unittest.TestCase):
         self.assertIn("ここまでは、山羊座が本来持つ恋愛傾向と運勢です。", message)
         self.assertLessEqual(len(message + "\n\n" + app.COURSE_MENU_TEXT), 5000)
 
+    def test_payment_notice_is_shown_before_course_buttons(self):
+        notice = "ボタンを押すと、お支払い画面が開きます"
+        self.assertIn(notice, app.COURSE_MENU_TEXT)
+        self.assertLess(app.COURSE_MENU_TEXT.index(notice), app.COURSE_MENU_TEXT.index("ご希望のコースをお選びください"))
+        self.assertIn(notice, app.continue_offer_message("表示名"))
+
     def test_premium_price_is_consistent(self):
         self.assertEqual(PLANS["premium"]["amount"], 6000)
         self.assertIn("プレミアム鑑定　6,000円", app.COURSE_MENU_TEXT)
