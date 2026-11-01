@@ -466,26 +466,6 @@ STEP_MESSAGES = {
 }
 
 
-def continue_offer_message(nickname):
-    return (
-        f"{nickname}さん🌙\n\n"
-        "ここまで読んでくださり、\n"
-        "ありがとうございます✨\n\n"
-        "「結局、あの人は今、\n"
-        "私のことをどう思ってるんだろう」\n\n"
-        "——その答えを、想像だけで終わらせずに、\n"
-        "星の配置から確かめてみませんか？🔮\n\n"
-        "【お試し鑑定　980円】\n"
-        "・気になっていることを1つ、じっくり読み解きます\n"
-        "・約1,500文字でお伝えします\n\n"
-        "「なんとなく」で悩む時間を、\n"
-        "今日で終わりにしましょう🌙\n\n"
-        "下のボタンからお申し込みいただけます💳\n"
-        "ボタンを押すと、お支払い画面が開きます。\n"
-        "お支払いのあとに、鑑定に必要な情報（生年月日など）を入力していただきます🌙"
-    )
-
-
 def normalized_text(text):
     return "".join(unicodedata.normalize("NFKC", text).lower().split())
 
@@ -917,20 +897,22 @@ def handle_message(event):
         elif matched_zodiac:
             # 無料鑑定に有料メニューを即同梱しない（無料→信頼構築→提案の順にするため）。
             # 続きは「続き」キーワードで本人のペースで進めてもらう（応答メッセージのみなので無料）。
+            # 星座を送り直した人は、続きを自己紹介から始め直す。
+            try:
+                StepProgressStore().reset_stage(line_user_id)
+            except Exception:
+                app.logger.exception("step progress reset failed")
             reply = TextMessage(text=build_fortune_message(matched_zodiac, nickname) + CONTINUE_PROMPT)
 
         elif normalized_text(text) == "続き":
             stage = StepProgressStore().advance_stage(line_user_id)
             if stage in STEP_MESSAGES:
                 reply = TextMessage(text=STEP_MESSAGES[stage].format(nickname=nickname))
-            elif stage == len(STEP_MESSAGES) + 1:
-                reply = TextMessage(
-                    text=continue_offer_message(nickname),
-                    quick_reply=course_quick_reply(line_user_id, nickname, "trial"),
-                )
             else:
+                # 最後は3コースの案内（スタンダードがおすすめ）と3つのボタン。
                 reply = TextMessage(
-                    text="すでにご案内はお送りしています🌙\nご興味があれば、いつでも「鑑定希望」と送ってくださいね✨"
+                    text="鑑定希望ありがとうございます🌙\n\n" + COURSE_MENU_TEXT,
+                    quick_reply=course_quick_reply(line_user_id, nickname),
                 )
 
         elif is_paid_consultation_request(text):

@@ -387,6 +387,12 @@ class StepProgressStore:
                 )
             return stage
 
+    def reset_stage(self, line_user_id):
+        with self._lock:
+            row = self._find_row(line_user_id)
+            if row:
+                self.worksheet.update([[line_user_id, 0, now_iso()]], f"A{row}:C{row}")
+
 
 def validate_intake(form, question_count):
     required = [

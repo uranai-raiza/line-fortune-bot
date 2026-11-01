@@ -74,7 +74,41 @@ class FlowTests(unittest.TestCase):
         notice = "ボタンを押すと、お支払い画面が開きます"
         self.assertIn(notice, app.COURSE_MENU_TEXT)
         self.assertLess(app.COURSE_MENU_TEXT.index(notice), app.COURSE_MENU_TEXT.index("ご希望のコースをお選びください"))
-        self.assertIn(notice, app.continue_offer_message("表示名"))
+
+    def test_continue_flow_restarts_on_zodiac_and_ends_with_course_menu(self):
+        stages = {}
+
+        class FakeStepStore:
+            def advance_stage(self, line_user_id):
+                stages[line_user_id] = stages.get(line_user_id, 0) + 1
+                return stages[line_user_id]
+
+            def reset_stage(self, line_user_id):
+                if line_user_id in stages:
+                    stages[line_user_id] = 0
+
+        def send(text):
+            event = unittest.mock.MagicMock()
+            event.message.text = text
+            event.source.user_id = "U123"
+            event.reply_token = "reply-token"
+            with patch("app.StepProgressStore", FakeStepStore), patch("app.MessagingApi") as api:
+                api.return_value.get_profile.return_value.display_name = "パパ"
+                app.handle_message(event)
+            return api.return_value.reply_message.call_args.args[0].messages[0]
+
+        stages["U123"] = 5  # 以前のテストで最後まで進んだ人
+        self.assertIn("続きが気になる方は「続き」と送ってください", send("魚座").text)
+        self.assertIn("改めまして、占星術×数秘術で", send("続き").text)
+        self.assertIn("実際に鑑定を受けた方からは", send("続き").text)
+        for _ in range(2):
+            last = send("続き")
+            self.assertTrue(last.text.startswith("鑑定希望ありがとうございます🌙"))
+            self.assertIn("スタンダード鑑定がおすすめです", last.text)
+            self.assertEqual(
+                [item.action.label for item in last.quick_reply.items],
+                ["お試し 980円", "スタンダード 2,000円", "プレミアム 6,000円"],
+            )
 
     def test_premium_price_is_consistent(self):
         self.assertEqual(PLANS["premium"]["amount"], 6000)
