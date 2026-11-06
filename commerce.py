@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 
 import gspread
@@ -116,20 +117,51 @@ def _fernet():
     return Fernet(key)
 
 
+CHECKOUT_TOKEN_TTL = 60 * 60 * 24
+
+
+class CheckoutTokenError(ValueError):
+    """決済ボタンのトークンを読めなかった理由（reason）を持つエラー。"""
+
+    def __init__(self, message, reason):
+        super().__init__(message)
+        self.reason = reason
+
+
 def create_checkout_token(line_user_id, display_name):
     payload = json.dumps(
         {"line_user_id": line_user_id, "display_name": display_name},
         ensure_ascii=False,
         separators=(",", ":"),
     ).encode("utf-8")
-    return _fernet().encrypt(payload).decode("ascii")
+    # 末尾の「=」はURLの途中で落ちることがあるため付けない（読むときに補う）。
+    return _fernet().encrypt(payload).decode("ascii").rstrip("=")
 
 
 def read_checkout_token(token):
+    token = (token or "").strip()
+    if not token:
+        raise CheckoutTokenError("決済リンクを確認できませんでした", "TOKEN_MISSING")
+    padded = token + "=" * (-len(token) % 4)
     try:
-        payload = _fernet().decrypt(token.encode("ascii"), ttl=60 * 60 * 24)
-    except (InvalidToken, ValueError) as exc:
-        raise ValueError("決済リンクの有効期限が切れています") from exc
+        raw = padded.encode("ascii")
+        decoded = base64.b64decode(raw, altchars=b"-_", validate=True)
+    except (UnicodeEncodeError, ValueError) as exc:
+        raise CheckoutTokenError("決済リンクを確認できませんでした", "TOKEN_MALFORMED") from exc
+    # Fernetの形式（先頭1バイトが0x80、最短57バイト）でなければ、途中で欠けたか別物。
+    if len(decoded) < 57 or decoded[0] != 0x80:
+        raise CheckoutTokenError("決済リンクを確認できませんでした", "TOKEN_MALFORMED")
+    fernet = _fernet()
+    try:
+        issued_at = fernet.extract_timestamp(raw)
+    except InvalidToken as exc:
+        raise CheckoutTokenError("決済リンクを確認できませんでした", "TOKEN_SIGNATURE") from exc
+    if time.time() - issued_at > CHECKOUT_TOKEN_TTL:
+        raise CheckoutTokenError("決済リンクの有効期限が切れています", "TOKEN_EXPIRED")
+    try:
+        payload = fernet.decrypt_at_time(raw, ttl=CHECKOUT_TOKEN_TTL, current_time=int(time.time()))
+    except InvalidToken as exc:
+        raise CheckoutTokenError("決済リンクの有効期限が切れています", "TOKEN_EXPIRED") from exc
     data = json.loads(payload.decode("utf-8"))
     if not data.get("line_user_id"):
         raise ValueError("LINE利用者を確認できません")

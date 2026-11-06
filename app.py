@@ -1,6 +1,7 @@
 import os
 import unicodedata
 from datetime import datetime, timedelta, timezone
+import stripe
 from flask import Flask, request, abort, redirect, render_template
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from linebot.v3 import WebhookHandler
@@ -20,6 +21,7 @@ from linebot.v3.webhooks import MessageEvent, TextMessageContent
 
 from commerce import (
     PLANS,
+    CheckoutTokenError,
     SheetsStore,
     StepProgressStore,
     create_checkout_session,
@@ -672,22 +674,42 @@ def health():
 
 @app.route("/checkout/start/<course>", methods=["GET"])
 def checkout_start(course):
+    token = request.args.get("token", "")
+    line_user_id = ""
     try:
-        identity = read_checkout_token(request.args.get("token", ""))
+        identity = read_checkout_token(token)
+        line_user_id = identity["line_user_id"]
         checkout = create_checkout_session(
             course,
-            identity["line_user_id"],
+            line_user_id,
             identity.get("display_name", ""),
             public_base_url(),
         )
         return redirect(checkout.url, code=303)
+    except CheckoutTokenError as exc:
+        app.logger.warning(
+            "checkout start rejected: course=%s reason=%s token_length=%d user_agent=%s",
+            course, exc.reason, len(token), request.headers.get("User-Agent", ""),
+        )
+        return checkout_error_page(str(exc), exc.reason), 400
+    except stripe.error.StripeError as exc:
+        app.logger.error(
+            "checkout session create failed: course=%s line_user_id=%s stripe_error=%s code=%s message=%s",
+            course, line_user_id, type(exc).__name__, getattr(exc, "code", ""), exc.user_message or str(exc),
+        )
+        return checkout_error_page("ただいま決済画面を準備できませんでした", "STRIPE_ERROR"), 502
     except (RuntimeError, ValueError) as exc:
-        return render_template(
-            "intake_complete.html",
-            title="決済画面を開けませんでした",
-            message=str(exc) + "。LINEへ戻り、もう一度コースを選んでください。",
-            session_id="未発行",
-        ), 400
+        app.logger.error("checkout start failed: course=%s error=%s", course, exc)
+        return checkout_error_page(str(exc), "CONFIG_ERROR"), 400
+
+
+def checkout_error_page(reason_text, reason_code):
+    return render_template(
+        "intake_complete.html",
+        title="決済画面を開けませんでした",
+        message=f"{reason_text}。LINEへ戻り、もう一度コースを選んでください。（確認コード：{reason_code}）",
+        session_id="未発行",
+    )
 
 
 @app.route("/checkout/cancelled", methods=["GET"])

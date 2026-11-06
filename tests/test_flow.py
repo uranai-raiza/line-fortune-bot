@@ -49,6 +49,78 @@ class FlowTests(unittest.TestCase):
         self.assertEqual(payload["line_user_id"], "U123456")
         self.assertEqual(payload["display_name"], "表示名")
 
+    def test_checkout_token_survives_lost_padding(self):
+        for name in ("a", "パパ", "占いライザ", "あいうえおかきくけこ"):
+            with self.subTest(name=name):
+                token = create_checkout_token("U" + "0" * 32, name)
+                self.assertNotIn("=", token)
+                self.assertEqual(read_checkout_token(token)["display_name"], name)
+                legacy = token + "=" * (-len(token) % 4)
+                self.assertEqual(read_checkout_token(legacy)["display_name"], name)
+
+    def test_checkout_token_failure_reason_is_reported(self):
+        from commerce import CheckoutTokenError
+        token = create_checkout_token("U123", "表示名")
+        cases = {
+            "": "TOKEN_MISSING",
+            "%%%": "TOKEN_MALFORMED",
+            token[:-6] + "AAAAAA": "TOKEN_SIGNATURE",
+        }
+        for value, reason in cases.items():
+            with self.subTest(reason=reason):
+                with self.assertRaises(CheckoutTokenError) as ctx:
+                    read_checkout_token(value)
+                self.assertEqual(ctx.exception.reason, reason)
+        later = datetime.now(timezone.utc) + timedelta(days=2)
+        with patch("commerce.time.time", return_value=later.timestamp()):
+            with self.assertRaises(CheckoutTokenError) as ctx:
+                read_checkout_token(token)
+        self.assertEqual(ctx.exception.reason, "TOKEN_EXPIRED")
+
+    def test_checkout_start_logs_and_shows_reason_for_bad_token(self):
+        with self.assertLogs(app.app.logger, level="WARNING") as logs:
+            response = app.app.test_client().get("/checkout/start/premium?token=broken")
+        self.assertEqual(response.status_code, 400)
+        html = response.get_data(as_text=True)
+        self.assertIn("決済画面を開けませんでした", html)
+        self.assertIn("TOKEN_MALFORMED", html)
+        self.assertIn("course=premium", logs.output[0])
+        self.assertIn("TOKEN_MALFORMED", logs.output[0])
+
+    def test_checkout_start_logs_stripe_error_instead_of_crashing(self):
+        token = create_checkout_token("U123", "表示名")
+        error = app.stripe.error.PermissionError("The provided key does not have access")
+        with patch("commerce.stripe.checkout.Session.create", side_effect=error):
+            with self.assertLogs(app.app.logger, level="ERROR") as logs:
+                response = app.app.test_client().get(f"/checkout/start/standard?token={token}")
+        self.assertEqual(response.status_code, 502)
+        self.assertIn("決済画面を開けませんでした", response.get_data(as_text=True))
+        self.assertIn("course=standard", logs.output[0])
+        self.assertIn("does not have access", logs.output[0])
+
+    def test_checkout_start_redirects_to_new_stripe_session_each_time(self):
+        token = create_checkout_token("U123", "表示名")
+        sessions = iter([
+            type("Session", (), {"url": "https://checkout.stripe.test/a"})(),
+            type("Session", (), {"url": "https://checkout.stripe.test/b"})(),
+        ])
+        with patch("commerce.stripe.checkout.Session.create", side_effect=lambda **kw: next(sessions)) as create:
+            client = app.app.test_client()
+            first = client.get(f"/checkout/start/premium?token={token}")
+            second = client.get(f"/checkout/start/premium?token={token}")
+        self.assertEqual(first.status_code, 303)
+        self.assertEqual(first.headers["Location"], "https://checkout.stripe.test/a")
+        self.assertEqual(second.headers["Location"], "https://checkout.stripe.test/b")
+        self.assertEqual(create.call_count, 2)
+        self.assertEqual(create.call_args.kwargs["line_items"][0]["price_data"]["unit_amount"], 6000)
+
+    def test_intake_shows_error_page_when_stripe_fails(self):
+        error = app.stripe.error.APIConnectionError("network down")
+        with patch("app.retrieve_paid_session", side_effect=error):
+            response = app.app.test_client().get("/intake?session_id=cs_test_001")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("決済を確認できませんでした", response.get_data(as_text=True))
+
     def test_all_plan_messages_fit_line_text_limit(self):
         for zodiac, fortune in app.FORTUNES.items():
             self.assertNotIn("鑑定希望」と送ってください", fortune, zodiac)
