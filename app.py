@@ -487,7 +487,7 @@ def is_free_reading_request(text):
 
 def is_paid_consultation_request(text):
     compact = normalized_text(text)
-    return any(marker in compact for marker in ("鑑定希望", "有料鑑定", "本鑑定", "鑑定をお願い", "相談したい"))
+    return any(marker in compact for marker in ("鑑定希望", "有料鑑定", "本鑑定", "鑑定をお願い", "相談したい", "希望"))
 
 
 def public_base_url():
