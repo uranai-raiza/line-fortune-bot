@@ -112,7 +112,7 @@ class FlowTests(unittest.TestCase):
         self.assertEqual(first.headers["Location"], "https://checkout.stripe.test/a")
         self.assertEqual(second.headers["Location"], "https://checkout.stripe.test/b")
         self.assertEqual(create.call_count, 2)
-        self.assertEqual(create.call_args.kwargs["line_items"][0]["price_data"]["unit_amount"], 6000)
+        self.assertEqual(create.call_args.kwargs["line_items"][0]["price_data"]["unit_amount"], 3000)
 
     def test_intake_shows_error_page_when_stripe_fails(self):
         error = app.stripe.error.APIConnectionError("network down")
@@ -126,7 +126,9 @@ class FlowTests(unittest.TestCase):
             self.assertNotIn("鑑定希望」と送ってください", fortune, zodiac)
             self.assertIn(f"ここまでは、{zodiac}が本来持つ恋愛傾向と運勢です。", fortune, zodiac)
             self.assertIn("相手の本音と、この恋を動かす時期", fortune, zodiac)
-            self.assertGreaterEqual(len(fortune), 400, zodiac)
+            self.assertNotIn("本鑑定でわかること", fortune, zodiac)
+            self.assertIn("あなた個人の占いではありません。", fortune, zodiac)
+            self.assertGreaterEqual(len(app.build_fortune_message(zodiac, "表示名")), 400, zodiac)
             message = fortune.format(Nickname="友だちの表示名") + "\n\n" + app.COURSE_MENU_TEXT
             self.assertLessEqual(len(message), 5000, zodiac)
 
@@ -167,28 +169,44 @@ class FlowTests(unittest.TestCase):
             with patch("app.StepProgressStore", FakeStepStore), patch("app.MessagingApi") as api:
                 api.return_value.get_profile.return_value.display_name = "パパ"
                 app.handle_message(event)
-            return api.return_value.reply_message.call_args.args[0].messages[0]
+            return api.return_value.reply_message.call_args.args[0].messages
 
         stages["U123"] = 5  # 以前のテストで最後まで進んだ人
-        self.assertIn("続きが気になる方は「続き」と送ってください", send("魚座").text)
-        self.assertIn("改めまして、占星術×数秘術で", send("続き").text)
-        self.assertIn("実際に鑑定を受けた方からは", send("続き").text)
+        first = send("魚座")[0].text
+        self.assertIn("あなた個人の占いではありません。", first)
+        self.assertIn("あなたが思いを寄せるそのお相手との縁は、本物なのか。", first)
+        self.assertNotIn("本鑑定でわかること", first)
+        self.assertTrue(first.endswith("興味がある方は「続き」と送ってくださいね🌙"))
+        step1 = send("続き")
+        self.assertEqual(len(step1), 1)
+        self.assertIn("まず、私の自己紹介をしますね。", step1[0].text)
+        self.assertIn("この3ヶ月で、146人の方に", step1[0].text)
+        step2 = send("続き")
+        self.assertEqual(len(step2), 3)
+        self.assertIn("星の配置と生年月日から紐解いていきます", step2[0].text)
+        self.assertEqual(step2[1].original_content_url, "https://example.test/static/kanteisho-sample.jpg")
+        self.assertEqual(step2[1].preview_image_url, "https://example.test/static/kanteisho-sample-preview.jpg")
+        self.assertIn("A4で9枚", step2[2].text)
+        self.assertEqual(
+            [item.action.label for item in step2[2].quick_reply.items],
+            ["お試し 980円", "スタンダード 2,000円", "プレミアム 3,000円"],
+        )
         for _ in range(2):
-            last = send("続き")
+            last = send("続き")[0]
             self.assertTrue(last.text.startswith("鑑定希望ありがとうございます🌙"))
             self.assertIn("スタンダード鑑定がおすすめです", last.text)
             self.assertEqual(
                 [item.action.label for item in last.quick_reply.items],
-                ["お試し 980円", "スタンダード 2,000円", "プレミアム 6,000円"],
+                ["お試し 980円", "スタンダード 2,000円", "プレミアム 3,000円"],
             )
 
     def test_premium_price_is_consistent(self):
-        self.assertEqual(PLANS["premium"]["amount"], 6000)
-        self.assertIn("プレミアム鑑定　6,000円", app.COURSE_MENU_TEXT)
+        self.assertEqual(PLANS["premium"]["amount"], 3000)
+        self.assertIn("プレミアム鑑定　3,000円", app.COURSE_MENU_TEXT)
         quick_reply = app.course_quick_reply("U1", "表示名")
-        self.assertEqual(quick_reply.items[2].action.label, "プレミアム 6,000円")
+        self.assertEqual(quick_reply.items[2].action.label, "プレミアム 3,000円")
         with patch.object(app, "STRIPE_PREMIUM_URL", "https://stripe.test/premium", create=True):
-            self.assertIn("6,000円", app.premium_message("表示名"))
+            self.assertIn("3,000円", app.premium_message("表示名"))
 
     def test_sheet_starts_with_requested_customer_columns(self):
         self.assertEqual(SHEET_HEADERS[:12], [
@@ -264,6 +282,16 @@ class FlowTests(unittest.TestCase):
         ):
             self.assertIn(expected, submit_message)
         self.assertIn("{CHECKOUT_SESSION_ID}", kwargs["success_url"])
+
+    def test_sample_images_are_served_within_line_limits(self):
+        client = app.app.test_client()
+        for path, limit in ((app.SAMPLE_IMAGE_PATH, 10 * 1024 * 1024), (app.SAMPLE_PREVIEW_PATH, 1024 * 1024)):
+            with self.subTest(path=path):
+                response = client.get(path)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.mimetype, "image/jpeg")
+                self.assertLessEqual(len(response.get_data()), limit)
+                response.close()
 
     def test_input_template_contains_required_warning_and_fields(self):
         source = (ROOT / "templates" / "intake.html").read_text(encoding="utf-8")
