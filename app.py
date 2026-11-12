@@ -913,12 +913,20 @@ def handle_message(event):
         else:
             reply = TextMessage(text=DEFAULT_MESSAGE)
 
-        line_bot_api.reply_message(
-            ReplyMessageRequest(
-                reply_token=event.reply_token,
-                messages=reply if isinstance(reply, list) else [reply],
+        messages = reply if isinstance(reply, list) else [reply]
+        try:
+            line_bot_api.reply_message(
+                ReplyMessageRequest(reply_token=event.reply_token, messages=messages)
             )
-        )
+        except Exception:
+            # 画像が原因で返信に失敗したときは、画像を外した文章だけでもう一度返す。
+            text_only = [m for m in messages if not isinstance(m, ImageMessage)]
+            if len(text_only) == len(messages):
+                raise
+            app.logger.exception("reply with sample image failed; retrying without image")
+            line_bot_api.reply_message(
+                ReplyMessageRequest(reply_token=event.reply_token, messages=text_only)
+            )
 
 
 if __name__ == "__main__":

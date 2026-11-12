@@ -283,6 +283,36 @@ class FlowTests(unittest.TestCase):
             self.assertIn(expected, submit_message)
         self.assertIn("{CHECKOUT_SESSION_ID}", kwargs["success_url"])
 
+    def test_step2_falls_back_to_text_when_image_reply_fails(self):
+        class FakeStepStore:
+            def advance_stage(self, line_user_id):
+                return 2
+
+            def reset_stage(self, line_user_id):
+                pass
+
+        event = unittest.mock.MagicMock()
+        event.message.text = "続き"
+        event.source.user_id = "U123"
+        event.reply_token = "reply-token"
+        with patch("app.StepProgressStore", FakeStepStore), patch("app.MessagingApi") as api:
+            api.return_value.get_profile.return_value.display_name = "パパ"
+            api.return_value.reply_message.side_effect = [RuntimeError("image rejected"), None]
+            with self.assertLogs(app.app.logger, level="ERROR"):
+                app.handle_message(event)
+        calls = api.return_value.reply_message.call_args_list
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(len(calls[0].args[0].messages), 3)
+        retried = calls[1].args[0].messages
+        self.assertEqual(len(retried), 2)
+        self.assertFalse(any(isinstance(m, app.ImageMessage) for m in retried))
+        self.assertIsNotNone(retried[-1].quick_reply)
+
+    def test_step2_texts_fit_line_limits(self):
+        self.assertLessEqual(len(app.STEP2_READING_TEXT.format(nickname="あ" * 20)), 5000)
+        self.assertLessEqual(len(app.STEP2_COURSE_TEXT), 5000)
+        self.assertLessEqual(len(app.STEP_MESSAGES[1].format(nickname="あ" * 20)), 5000)
+
     def test_sample_images_are_served_within_line_limits(self):
         client = app.app.test_client()
         for path, limit in ((app.SAMPLE_IMAGE_PATH, 10 * 1024 * 1024), (app.SAMPLE_PREVIEW_PATH, 1024 * 1024)):
