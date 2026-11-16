@@ -20,6 +20,11 @@ import app
 import commerce
 
 
+def healthy_line(api):
+    api.get_webhook_endpoint.return_value = MagicMock(active=True, endpoint="https://example.test/webhook")
+    api.get_message_quota.return_value = MagicMock(type="none", value=None)
+
+
 def session(session_id, minutes_ago=60, course="standard"):
     metadata = {"course": course, "line_user_id": "U1", "line_display_name": "まき"} if course else {}
     return {"id": session_id, "payment_status": "paid", "created": int(time.time()) - minutes_ago * 60,
@@ -30,7 +35,7 @@ class PatrolTests(unittest.TestCase):
     def setUp(self):
         app._patrol_state.update({"checked_at": 0.0, "result": ("OK", 200), "alerted": {}})
 
-    def call(self, sessions, recorded, stripe_error=None, sheet_error=None):
+    def call(self, sessions, recorded, stripe_error=None, sheet_error=None, line=None):
         store = MagicMock()
         if sheet_error:
             store.all_session_ids.side_effect = sheet_error
@@ -39,8 +44,48 @@ class PatrolTests(unittest.TestCase):
         listing = MagicMock(side_effect=stripe_error) if stripe_error else MagicMock(return_value=sessions)
         with patch("app.list_recent_paid_sessions", listing), patch("app.SheetsStore", return_value=store), \
                 patch("app.MessagingApi") as api:
+            healthy_line(api.return_value)
+            if line:
+                line(api.return_value)
             response = app.app.test_client().get("/patrol")
         return response, [c.args[0] for c in api.return_value.push_message.call_args_list]
+
+    def test_line_token_dead_is_ng(self):
+        def broken(api):
+            api.get_bot_info.side_effect = RuntimeError("401 Unauthorized")
+        response, _ = self.call([], [], line=broken)
+        self.assertEqual(response.status_code, 500)
+
+    def test_line_webhook_turned_off_is_ng(self):
+        def off(api):
+            api.get_webhook_endpoint.return_value = MagicMock(active=False, endpoint="https://example.test/webhook")
+        response, pushes = self.call([], [], line=off)
+        self.assertEqual(response.status_code, 500)
+        self.assertIn("入口", pushes[0].messages[0].text)
+
+    def test_line_webhook_pointing_elsewhere_is_ng(self):
+        def moved(api):
+            api.get_webhook_endpoint.return_value = MagicMock(active=True, endpoint="https://other.test/webhook")
+        response, _ = self.call([], [], line=moved)
+        self.assertEqual(response.status_code, 500)
+
+    def test_line_quota_used_up_is_ng(self):
+        def full(api):
+            api.get_message_quota.return_value = MagicMock(type="limited", value=200)
+            api.get_message_quota_consumption.return_value = MagicMock(total_usage=200)
+        response, _ = self.call([], [], line=full)
+        self.assertEqual(response.status_code, 500)
+
+    def test_line_quota_remaining_is_ok(self):
+        def some(api):
+            api.get_message_quota.return_value = MagicMock(type="limited", value=200)
+            api.get_message_quota_consumption.return_value = MagicMock(total_usage=12)
+        response, _ = self.call([], [], line=some)
+        self.assertEqual(response.status_code, 200)
+
+    def test_line_check_never_sends_messages_when_healthy(self):
+        response, pushes = self.call([session("cs_live_a")], ["cs_live_a"])
+        self.assertEqual(pushes, [])
 
     def test_all_recorded_is_ok(self):
         response, pushes = self.call([session("cs_live_a"), session("cs_live_b")], ["cs_live_a", "cs_live_b"])
@@ -83,8 +128,9 @@ class PatrolTests(unittest.TestCase):
     def test_repeated_calls_within_4_minutes_reuse_result(self):
         self.call([session("cs_live_a")], ["cs_live_a"])
         listing = MagicMock(return_value=[])
-        with patch("app.list_recent_paid_sessions", listing):
+        with patch("app.list_recent_paid_sessions", listing), patch("app.MessagingApi") as api:
             response = app.app.test_client().get("/patrol")
+        api.return_value.get_bot_info.assert_not_called()
         self.assertEqual(response.status_code, 200)
         listing.assert_not_called()
 

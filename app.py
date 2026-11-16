@@ -525,9 +525,40 @@ PATROL_ALERT_INTERVAL = 6 * 3600    # 同じ問題の知らせは6時間に1回�
 _patrol_state = {"checked_at": 0.0, "result": ("OK", 200), "alerted": {}}
 
 
+def check_line():
+    """LINEが使える状態かを見る。読むだけで、送れる通数は使わない。問題の一覧を返す。"""
+    problems = []
+    try:
+        with ApiClient(configuration) as api_client:
+            api = MessagingApi(api_client)
+            api.get_bot_info()  # 鍵（アクセストークン）が生きているか
+            endpoint = api.get_webhook_endpoint()
+            expected = f"{public_base_url()}/webhook"
+            if not endpoint.active or endpoint.endpoint != expected:
+                problems.append(
+                    f"LINEからボットへの入口が正しくありません（オン：{endpoint.active}、行き先：{endpoint.endpoint}）"
+                )
+            quota = api.get_message_quota()
+            if getattr(quota.type, "value", quota.type) == "limited":
+                used = api.get_message_quota_consumption().total_usage
+                if used >= quota.value:
+                    problems.append(f"LINEで今月送れる通数を使い切りました（{used}／{quota.value}通）。案内や知らせが送れません")
+    except Exception as exc:
+        app.logger.exception("patrol: line check failed")
+        problems.append(f"LINEに問い合わせできませんでした（{type(exc).__name__}: {exc}）")
+    return problems
+
+
 def run_patrol(now=None):
-    """Stripeで払いがあったのに台帳に入っていない人がいないかを見る。読むだけで何も書き換えない。"""
+    """Stripe・台帳・LINEを見て、問題の一覧と見比べた払いの件数を返す。読むだけで何も書き換えない。"""
     current = now if now is not None else time.time()
+    line_problems = check_line()
+    problems, checked = check_payments(current)
+    return line_problems + problems, checked
+
+
+def check_payments(current):
+    """Stripeで払いがあったのに台帳に入っていない人がいないかを見る。"""
     problems = []
     try:
         sessions = list_recent_paid_sessions()
@@ -560,7 +591,11 @@ def run_patrol(now=None):
 
 @app.route("/patrol", methods=["GET", "HEAD"])
 def patrol():
-    """UptimeRobotが5分ごとに呼ぶ点検の入口。問題があれば500を返し、オーナーのLINEにも知らせる。"""
+    """UptimeRobotが5分ごとに呼ぶ点検の入口。
+
+    問題があれば500を返す → UptimeRobotがオーナーのGmailに知らせる（LINEが止まっていても届く）。
+    あわせてオーナーのLINEにも中身を送る（LINEが生きていれば届く）。
+    """
     now = time.time()
     if now - _patrol_state["checked_at"] < PATROL_CACHE_SECONDS:
         return _patrol_state["result"]
