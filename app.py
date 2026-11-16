@@ -533,16 +533,18 @@ def run_patrol(now=None):
         sessions = list_recent_paid_sessions()
     except Exception as exc:
         app.logger.exception("patrol: stripe read failed")
-        return [f"Stripeの払いの一覧を読めませんでした（{type(exc).__name__}: {exc}）"]
+        return [f"Stripeの払いの一覧を読めませんでした（{type(exc).__name__}: {exc}）"], 0
     try:
         recorded = SheetsStore().all_session_ids()
     except Exception as exc:
         app.logger.exception("patrol: sheet read failed")
-        return [f"鑑定管理シートを読めませんでした（{type(exc).__name__}: {exc}）"]
+        return [f"鑑定管理シートを読めませんでした（{type(exc).__name__}: {exc}）"], 0
+    checked = 0
     for session in sessions:
         metadata = session.get("metadata") or {}
         if metadata.get("course") not in PLANS:
             continue  # LPなどボットを通らない払いは、受け取ったときに別で知らせている
+        checked += 1
         if session.get("id") in recorded:
             continue
         if current - int(session.get("created") or 0) < PATROL_GRACE_SECONDS:
@@ -553,7 +555,7 @@ def run_patrol(now=None):
         )
     if problems:
         problems.insert(0, "お支払いがあったのに、鑑定管理シートに入っていない方がいます。")
-    return problems
+    return problems, checked
 
 
 @app.route("/patrol", methods=["GET", "HEAD"])
@@ -562,7 +564,7 @@ def patrol():
     now = time.time()
     if now - _patrol_state["checked_at"] < PATROL_CACHE_SECONDS:
         return _patrol_state["result"]
-    problems = run_patrol(now)
+    problems, checked = run_patrol(now)
     if problems:
         text = "\n".join(problems)
         last = _patrol_state["alerted"].get(text, 0)
@@ -571,7 +573,8 @@ def patrol():
             _patrol_state["alerted"][text] = now
         result = ("NG", 500)  # お客様の情報は外に出さない。中身はLINEだけに送る
     else:
-        result = ("OK", 200)
+        # 見比べた件数だけ添える（お客様の情報は出さない）。外から「本当に見ているか」を確かめられるように
+        result = (f"OK checked={checked}", 200)
     _patrol_state["checked_at"] = now
     _patrol_state["result"] = result
     return result

@@ -45,7 +45,7 @@ class PatrolTests(unittest.TestCase):
     def test_all_recorded_is_ok(self):
         response, pushes = self.call([session("cs_live_a"), session("cs_live_b")], ["cs_live_a", "cs_live_b"])
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.get_data(as_text=True), "OK")
+        self.assertEqual(response.get_data(as_text=True), "OK checked=2")
         self.assertEqual(pushes, [])
 
     def test_missing_payment_is_ng_and_alerts_owner(self):
