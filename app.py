@@ -1,4 +1,5 @@
 import os
+import time
 import unicodedata
 from datetime import datetime, timedelta, timezone
 import stripe
@@ -29,6 +30,7 @@ from commerce import (
     create_checkout_token,
     read_checkout_token,
     is_active_order,
+    list_recent_paid_sessions,
     recent_same_course_orders,
     retrieve_paid_session,
     stripe_to_dict,
@@ -517,6 +519,64 @@ def health():
     return "OK"
 
 
+PATROL_CACHE_SECONDS = 240          # UptimeRobot（5分ごと）より短く。何度呼ばれても読むのは数分に1回
+PATROL_GRACE_SECONDS = 15 * 60      # 払ってすぐはStripeの知らせが届く途中なので、15分は待つ
+PATROL_ALERT_INTERVAL = 6 * 3600    # 同じ問題の知らせは6時間に1回まで
+_patrol_state = {"checked_at": 0.0, "result": ("OK", 200), "alerted": {}}
+
+
+def run_patrol(now=None):
+    """Stripeで払いがあったのに台帳に入っていない人がいないかを見る。読むだけで何も書き換えない。"""
+    current = now if now is not None else time.time()
+    problems = []
+    try:
+        sessions = list_recent_paid_sessions()
+    except Exception as exc:
+        app.logger.exception("patrol: stripe read failed")
+        return [f"Stripeの払いの一覧を読めませんでした（{type(exc).__name__}: {exc}）"]
+    try:
+        recorded = SheetsStore().all_session_ids()
+    except Exception as exc:
+        app.logger.exception("patrol: sheet read failed")
+        return [f"鑑定管理シートを読めませんでした（{type(exc).__name__}: {exc}）"]
+    for session in sessions:
+        metadata = session.get("metadata") or {}
+        if metadata.get("course") not in PLANS:
+            continue  # LPなどボットを通らない払いは、受け取ったときに別で知らせている
+        if session.get("id") in recorded:
+            continue
+        if current - int(session.get("created") or 0) < PATROL_GRACE_SECONDS:
+            continue
+        problems.append(
+            f"・{metadata.get('line_display_name', '')}さん／{PLANS[metadata['course']]['label']}"
+            f"／{session.get('id')}"
+        )
+    if problems:
+        problems.insert(0, "お支払いがあったのに、鑑定管理シートに入っていない方がいます。")
+    return problems
+
+
+@app.route("/patrol", methods=["GET", "HEAD"])
+def patrol():
+    """UptimeRobotが5分ごとに呼ぶ点検の入口。問題があれば500を返し、オーナーのLINEにも知らせる。"""
+    now = time.time()
+    if now - _patrol_state["checked_at"] < PATROL_CACHE_SECONDS:
+        return _patrol_state["result"]
+    problems = run_patrol(now)
+    if problems:
+        text = "\n".join(problems)
+        last = _patrol_state["alerted"].get(text, 0)
+        if now - last >= PATROL_ALERT_INTERVAL:
+            notify_admin_alert("⚠️ 巡回で見つかりました。\n\n" + text)
+            _patrol_state["alerted"][text] = now
+        result = ("NG", 500)  # お客様の情報は外に出さない。中身はLINEだけに送る
+    else:
+        result = ("OK", 200)
+    _patrol_state["checked_at"] = now
+    _patrol_state["result"] = result
+    return result
+
+
 @app.route("/checkout/start/<course>", methods=["GET"])
 def checkout_start(course):
     token = request.args.get("token", "")
@@ -605,6 +665,19 @@ def stripe_webhook():
     session_id = session.get("id", "")
     metadata = session.get("metadata") or {}
     course = metadata.get("course", "")
+    if course not in PLANS:
+        # LPの支払いリンクなど、ボットを通らない払い。台帳には入れず、オーナーに1回だけ知らせる。
+        # （500を返すとStripeが何日も送り直し、知らせが鳴り続けるので200で受ける）
+        customer = session.get("customer_details") or {}
+        notify_admin_alert(
+            "💳 LINEボットを通らないお支払いがありました（LPの支払いリンクなど）。\n"
+            "入力の案内は自動では送っていません。お客様に連絡してください。\n\n"
+            f"金額：{session.get('amount_total', '')}円\n"
+            f"お名前：{customer.get('name') or ''}\n"
+            f"メール：{customer.get('email') or ''}\n"
+            f"Stripe決済番号：\n{session_id}"
+        )
+        return "OK"
     try:
         store = SheetsStore()
         _, created = store.upsert_payment(session, event["id"])

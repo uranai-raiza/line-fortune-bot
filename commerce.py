@@ -230,6 +230,19 @@ def retrieve_paid_session(session_id):
     return session
 
 
+def list_recent_paid_sessions(hours=48):
+    """直近の、支払い済みの Checkout の一覧（ふつうの dict）を返す。巡回用。読むだけ。"""
+    configure_stripe()
+    since = int(time.time()) - hours * 3600
+    sessions = stripe.checkout.Session.list(created={"gte": since}, limit=100)
+    paid = []
+    for session in sessions.auto_paging_iter():
+        data = stripe_to_dict(session)
+        if data.get("payment_status") == "paid":
+            paid.append(data)
+    return paid
+
+
 def verify_webhook(payload, signature):
     secret = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
     if not secret:
@@ -343,6 +356,10 @@ class SheetsStore:
                 return False
             self._update_cells(row_number, current, {"StripeイベントID": event_id or "guide-sent"})
             return True
+
+    def all_session_ids(self):
+        """台帳に入っている決済番号の一覧（巡回用。読むだけ）。"""
+        return set(self.worksheet.col_values(1)[1:])
 
     def orders_for_line_user(self, line_user_id):
         """そのLINEの人の注文の行を全部返す（見出しで引ける dict の一覧）。"""
