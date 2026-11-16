@@ -28,6 +28,8 @@ from commerce import (
     create_checkout_session,
     create_checkout_token,
     read_checkout_token,
+    is_active_order,
+    recent_same_course_orders,
     retrieve_paid_session,
     stripe_to_dict,
     validate_intake,
@@ -422,7 +424,8 @@ def is_free_reading_request(text):
         return False
     if "モニター" in compact:
         return True
-    free_markers = ("無料", "0円", "ただ")
+    # 「ただ」だけだと「いただきたい」「ただいま」に当たるので使わない。
+    free_markers = ("無料", "0円", "タダ", "ただで")
     request_markers = ("鑑定", "占い", "占って", "見て", "みて")
     return any(marker in compact for marker in free_markers) and any(
         marker in compact for marker in request_markers
@@ -509,127 +512,6 @@ def is_consultation_submission(text):
     )
 
 
-def trial_message(nickname):
-    return f"""✨ お試し鑑定 980円 のご案内 ✨
-
-{nickname}さん、ご興味を持っていただきありがとうございます🌸
-
-【内容】
-・現在の運気の流れ
-・近い将来の運勢
-・アドバイスメッセージ
-・1つのご質問にお答えします
-・1,500文字程度
-
-【お申し込み方法】
-以下のリンクからお支払いください。
-お支払い完了後、このトークに以下をお送りください。
-①お名前（ニックネーム可）
-②生年月日
-③お悩みのこと（簡単に）
-
-💳 お支払いはこちら
-{STRIPE_TRIAL_URL}
-
-✅ お支払い完了後、以下をこのトークにお送りください
-
-【ご本人】
-①お名前（ニックネーム可）
-②生年月日
-③出生時間（わかれば）
-④星座
-
-【お相手】
-①お名前（ニックネーム可）
-②生年月日
-③出生時間（わかれば）
-④星座
-
-⑤「現在の状況」（お相手との関係、現在どんな状況か）
-⑥「ご相談内容」（聞きたいこと）
-
-丁寧に鑑定いたします！"""
-
-
-def standard_message(nickname):
-    return f"""✨ 【スタンダード】パーソナル星座鑑定 2,000円 のご案内 ✨
-
-{nickname}さん、ご興味を持っていただきありがとうございます🌸
-
-【内容】
-・占星術×数秘術でじっくり読み解く
-・2つのご質問にお答えします
-・2,500文字程度
-
-【お申し込み方法】
-①お名前（ニックネーム可）
-②生年月日
-③星座
-④ご相談内容
-
-💳 お支払いはこちら
-{STRIPE_STANDARD_URL}
-
-✅ お支払い完了後、以下をこのトークにお送りください
-
-【ご本人】
-①お名前（ニックネーム可）
-②生年月日
-③出生時間（わかれば）
-④星座
-
-【お相手】
-①お名前（ニックネーム可）
-②生年月日
-③出生時間（わかれば）
-④星座
-
-⑤「現在の状況」（お相手との関係、現在どんな状況か）
-⑥「ご相談内容」（聞きたいこと）
-
-丁寧に鑑定いたします！"""
-
-
-def premium_message(nickname):
-    return f"""✨ 【プレミアム】占星術×数秘術鑑定 3,000円 のご案内 ✨
-
-{nickname}さん、ご興味を持っていただきありがとうございます🌸
-
-【内容】
-・3ヶ月の運気の流れ
-・占星術×数秘術で深く読み解く
-・3つのご質問にお答えします
-・3,500文字程度
-
-【お申し込み方法】
-①お名前（ニックネーム可）
-②生年月日
-③星座
-④ご相談内容
-
-💳 お支払いはこちら
-{STRIPE_PREMIUM_URL}
-
-✅ お支払い完了後、以下をこのトークにお送りください
-
-【ご本人】
-①お名前（ニックネーム可）
-②生年月日
-③出生時間（わかれば）
-④星座
-
-【お相手】
-①お名前（ニックネーム可）
-②生年月日
-③出生時間（わかれば）
-④星座
-
-⑤「現在の状況」（お相手との関係、現在どんな状況か）
-⑥「ご相談内容」（聞きたいこと）
-
-丁寧に鑑定いたします！"""
-
-
 @app.route("/", methods=["GET"])
 def health():
     return "OK"
@@ -642,6 +524,18 @@ def checkout_start(course):
     try:
         identity = read_checkout_token(token)
         line_user_id = identity["line_user_id"]
+        already = recent_paid_same_course(line_user_id, course)
+        if already:
+            return render_template(
+                "intake_complete.html",
+                title="お支払いはもう済んでいますよ",
+                message=(
+                    f"{PLANS[course]['label']}のお支払いは、少し前に済んでいます🌙 "
+                    "入力のご案内をLINEにお送りしていますので、そちらから入力してくださいね。"
+                    "もう1件お申し込みになりたいときは、30分ほどあけてから、もう一度ボタンを押していただけますか。"
+                ),
+                session_id=already[0].get("Stripe決済番号", ""),
+            )
         checkout = create_checkout_session(
             course,
             line_user_id,
@@ -664,6 +558,18 @@ def checkout_start(course):
     except (RuntimeError, ValueError) as exc:
         app.logger.error("checkout start failed: course=%s error=%s", course, exc)
         return checkout_error_page(str(exc), "CONFIG_ERROR"), 400
+
+
+def recent_paid_same_course(line_user_id, course):
+    """同じ人が同じコースを30分以内に払っていれば、その注文を返す。台帳が読めなければ止めない。"""
+    if course not in PLANS:
+        return []
+    try:
+        orders = SheetsStore().orders_for_line_user(line_user_id)
+    except Exception:
+        app.logger.exception("duplicate check failed line_user_id=%s", line_user_id)
+        return []
+    return recent_same_course_orders(orders, PLANS[course]["label"])
 
 
 def checkout_error_page(reason_text, reason_code):
@@ -700,7 +606,10 @@ def stripe_webhook():
     metadata = session.get("metadata") or {}
     course = metadata.get("course", "")
     try:
-        _, created = SheetsStore().upsert_payment(session, event["id"])
+        store = SheetsStore()
+        _, created = store.upsert_payment(session, event["id"])
+        # 入力ページが先に行を作っていた場合も、案内は1回だけ必ず送る
+        should_guide = created or store.claim_intake_guide(session_id, event["id"])
     except Exception as exc:
         # 書けなかったら500を返してStripeにやり直させ、オーナーにもすぐ知らせる
         app.logger.exception("stripe webhook: sheet write failed session=%s", session_id)
@@ -712,7 +621,28 @@ def stripe_webhook():
         )
         return "sheet write failed", 500
 
-    if created:
+    duplicates = []
+    if should_guide:
+        try:
+            duplicates = recent_same_course_orders(
+                store.orders_for_line_user(metadata.get("line_user_id", "")),
+                PLANS.get(course, {}).get("label", ""),
+                exclude_session_id=session_id,
+            )
+        except Exception:
+            # 確かめられないときは、案内を送る方を選ぶ（お客様を待たせない）
+            app.logger.exception("stripe webhook: duplicate check failed session=%s", session_id)
+
+    if should_guide and duplicates:
+        # 同じ人が同じコースを短い間に2回以上払った。お客様に2通目は送らず、オーナーに返金の確認を頼む。
+        notify_admin_alert(
+            "⚠️ 同じ方が同じコースを30分以内にもう一度お支払いしています。返金を確かめてください。\n\n"
+            f"お名前（LINE）：{metadata.get('line_display_name', '')}\n"
+            f"コース：{PLANS.get(course, {}).get('label', course)}\n"
+            f"今回の決済番号：\n{session_id}\n\n"
+            "前の決済番号：\n" + "\n".join(o.get("Stripe決済番号", "") for o in duplicates)
+        )
+    elif should_guide:
         try:
             send_intake_guide(session)
         except Exception as exc:
@@ -772,19 +702,51 @@ def notify_admin_alert(text):
         app.logger.exception("admin alert push failed")
 
 
-def notify_admin(session_id, customer_name, course_label):
+INTAKE_FIELDS_FROM_FORM = [
+    ("お名前", "customer_name"), ("生年月日", "customer_birth_date"),
+    ("出生時間", "customer_birth_time"), ("出生地", "customer_birth_place"), ("星座", "customer_zodiac"),
+    ("お相手のお名前", "partner_name"), ("お相手の生年月日", "partner_birth_date"),
+    ("お相手の出生時間", "partner_birth_time"), ("お相手の出生地", "partner_birth_place"),
+    ("お相手の星座", "partner_zodiac"), ("今の関係", "relationship"), ("今の状況", "situation"),
+]
+INTAKE_FIELDS_FROM_ROW = [
+    ("お名前", "本人の名前"), ("生年月日", "生年月日"), ("出生時間", "出生時間"),
+    ("出生地", "本人の出生地"), ("星座", "星座"), ("お相手のお名前", "相手の名前"),
+    ("お相手の生年月日", "相手の生年月日"), ("お相手の出生時間", "相手の出生時間"),
+    ("お相手の出生地", "相手の出生地"), ("お相手の星座", "相手の星座"),
+    ("今の関係", "現在の関係"), ("今の状況", "現在の状況"), ("知りたいこと", "相談内容"),
+]
+
+
+def intake_summary_from_form(form):
+    lines = [f"{label}：{str(form.get(key, '')).strip()}" for label, key in INTAKE_FIELDS_FROM_FORM]
+    questions = [str(form.get(f"question_{i}", "")).strip() for i in range(1, 4)]
+    questions = [q for q in questions if q]
+    lines.append("知りたいこと：\n" + "\n".join(f"{i}. {q}" for i, q in enumerate(questions, 1)))
+    return "\n".join(lines)
+
+
+def intake_summary_from_row(row):
+    return "\n".join(f"{label}：{row.get(key, '')}" for label, key in INTAKE_FIELDS_FROM_ROW)
+
+
+def notify_admin(session_id, customer_name, course_label, summary="", note=""):
+    """入力完了をオーナーに知らせる。入力の中身も全部付ける（台帳を開かなくても鑑定に入れるように）。"""
     admin_user_id = os.environ.get("ADMIN_LINE_USER_ID", "")
     if not admin_user_id:
         raise RuntimeError("ADMIN_LINE_USER_ID が設定されていません")
     message = (
-        "🔮 新しい鑑定依頼を受け付けました\n\n"
+        "🔮 新しい鑑定依頼を受け付けました\n"
+        + (f"{note}\n" if note else "")
+        + f"\nコース：{course_label}\n"
+        f"顧客名：{customer_name}\n\n"
+        f"【入力の中身】\n{summary}\n\n"
         f"Stripe決済番号：\n{session_id}\n\n"
-        f"コース：\n{course_label}\n\n"
-        f"顧客名：\n{customer_name}\n\n"
-        "鑑定情報の入力：\n完了\n\n"
-        "WEBでお客様のホロスコープを取得してください。\n\n"
+        "WEBでお客様のホロスコープを取得してください。\n"
         f"取得後、ホロスコープと顧客名「{customer_name}」をCodexに知らせて、鑑定書作成を依頼してください。"
     )
+    if len(message) > 4900:
+        message = message[:4900] + "\n…（長いので途中まで。続きは鑑定管理シートを見てください）"
     with ApiClient(configuration) as api_client:
         MessagingApi(api_client).push_message(PushMessageRequest(
             to=admin_user_id,
@@ -803,11 +765,13 @@ def intake():
         store.upsert_payment(session)
     except (RuntimeError, ValueError, stripe.error.StripeError) as exc:
         app.logger.error("intake failed session=%s error=%s: %s", session_id, type(exc).__name__, exc)
-        notify_admin_alert(
-            "⚠️ お客様が入力ページを開けませんでした。\n\n"
-            f"Stripe決済番号：\n{session_id or '未確認'}\n\n"
-            f"エラー：{type(exc).__name__}: {exc}"
-        )
+        # 本物の決済番号のときだけ知らせる（でたらめなアクセスで知らせが鳴り続けないように）
+        if session_id.startswith("cs_live_"):
+            notify_admin_alert(
+                "⚠️ お客様が入力ページを開けませんでした。\n\n"
+                f"Stripe決済番号：\n{session_id}\n\n"
+                f"エラー：{type(exc).__name__}: {exc}"
+            )
         return render_template(
             "intake_complete.html",
             title="決済を確認できませんでした",
@@ -832,10 +796,11 @@ def intake():
     if existing and existing[1].get("鑑定情報入力状態") == "入力済み":
         if existing[1].get("管理者通知状態") != "通知済み":
             try:
-                notify_admin(session_id, existing[1].get("本人の名前", ""), plan["label"])
+                notify_admin(session_id, existing[1].get("本人の名前", ""), plan["label"],
+                             intake_summary_from_row(existing[1]))
                 store.mark_notified(session_id)
             except Exception:
-                pass
+                app.logger.exception("admin notify retry failed session=%s", session_id)
         return render_template(
             "intake_complete.html",
             title="すでに受付済みです",
@@ -848,21 +813,50 @@ def intake():
         try:
             signed_session_id = serializer.loads(
                 request.form.get("form_token", ""),
-                max_age=60 * 60 * 2,
+                max_age=60 * 60 * 24,
             )
             if signed_session_id != session_id:
                 raise BadSignature("決済番号が一致しません")
-        except (BadSignature, SignatureExpired):
+        except SignatureExpired:
+            # 入力に時間がかかった人の入力を消さない。入れた内容を残したまま、送り直してもらう。
+            return render_template(
+                "intake.html",
+                session_id=session_id,
+                form_token=serializer.dumps(session_id),
+                plan=plan,
+                zodiacs=ZODIACS,
+                values=request.form,
+                error="時間が空いたため、もう一度だけ「送信」を押してくださいね。入力した内容はそのまま残っています。",
+            )
+        except BadSignature:
             return render_template(
                 "intake_complete.html",
-                title="入力画面の有効期限が切れました",
-                message="決済完了画面から入力ページを開き直してください。",
+                title="入力画面を確かめられませんでした",
+                message="お手数ですが、LINEにお送りしたご案内のリンクから入力ページを開き直してくださいね。",
                 session_id=session_id,
             ), 400
 
         error = validate_intake(request.form, plan["questions"])
         if not error:
-            created = store.save_intake(session_id, request.form)
+            summary = intake_summary_from_form(request.form)
+            customer_name = request.form["customer_name"].strip()
+            try:
+                created = store.save_intake(session_id, request.form)
+            except Exception as exc:
+                # 台帳に書けなくても、入力の中身はオーナーのLINEに届ける（お客様の入力を失わない）
+                app.logger.exception("intake save failed session=%s", session_id)
+                try:
+                    notify_admin(session_id, customer_name, plan["label"], summary,
+                                 note=f"⚠️ 鑑定管理シートに書けなかったので、中身をここに送ります（{type(exc).__name__}）")
+                except Exception:
+                    app.logger.exception("intake save failed AND admin notify failed session=%s summary=%s",
+                                         session_id, summary)
+                return render_template(
+                    "intake_complete.html",
+                    title="鑑定情報を受け付けました",
+                    message="すべての入力が完了しました。LINEへ戻ってご連絡をお待ちくださいね。",
+                    session_id=session_id,
+                )
             if not created:
                 return render_template(
                     "intake_complete.html",
@@ -871,10 +865,11 @@ def intake():
                     session_id=session_id,
                 )
             try:
-                notify_admin(session_id, request.form["customer_name"].strip(), plan["label"])
+                notify_admin(session_id, customer_name, plan["label"], summary)
                 store.mark_notified(session_id)
             except Exception:
-                pass
+                # 知らせが届かなかった。台帳には「未通知」のまま残るので、巡回で拾える。
+                app.logger.exception("admin notify failed after intake session=%s", session_id)
             return render_template(
                 "intake_complete.html",
                 title="鑑定情報を受け付けました",
@@ -910,8 +905,72 @@ def webhook():
     return "OK"
 
 
+RECEIPT_MESSAGE = (
+    "{nickname}さん🌙\n"
+    "メッセージありがとうございます。\n"
+    "内容を確かに受け取りました。\n"
+    "確認して、こちらからお返事いたしますね。"
+)
+
+ERROR_FALLBACK_MESSAGE = (
+    "ごめんなさい🌙\n"
+    "ただいま、うまくお返事できませんでした。\n"
+    "少し時間をおいて、もう一度送っていただけますか。"
+)
+
+COURSE_BUTTON_TEXTS = ("お試し鑑定希望", "スタンダード鑑定希望", "プレミアム鑑定希望")
+
+
+def active_orders_for(line_user_id):
+    """お支払い済みで鑑定書をまだ送っていない注文。台帳が読めなければ空（ふつうの返事に戻す）。"""
+    try:
+        return [o for o in SheetsStore().orders_for_line_user(line_user_id) if is_active_order(o)]
+    except Exception:
+        app.logger.exception("active order lookup failed line_user_id=%s", line_user_id)
+        return []
+
+
+def wants_course_menu(text):
+    """支払い済みの人でも、コースを選び直したい短い言葉なら、ふつうの案内を出す。"""
+    if text in COURSE_BUTTON_TEXTS or normalized_text(text) == "続き":
+        return True
+    return len(text) <= 40 and is_paid_consultation_request(text)
+
+
+def forward_to_admin(nickname, line_user_id, text, orders=None):
+    if orders:
+        courses = "・".join(sorted({o.get("コース", "") for o in orders}))
+        head = f"💬 お支払い済みの{nickname}さん（{courses}）からLINEが届きました。"
+    else:
+        head = f"💬 {nickname}さんから、鑑定の情報らしいLINEが届きました。お支払いを確かめてください。"
+    notify_admin_alert(f"{head}\n自動では「受け取りました」とだけ返しています。\n\n{text[:4000]}")
+
+
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
+    try:
+        _handle_message(event)
+    except Exception as exc:
+        # どこで止まっても、お客様を無言にしない。オーナーにも知らせる。
+        app.logger.exception("handle_message failed")
+        user_id = getattr(event.source, "user_id", "")
+        notify_admin_alert(
+            "⚠️ LINEの返事の途中でエラーが起きました。\n\n"
+            f"LINE識別番号：{user_id}\n"
+            f"届いた言葉：{event.message.text[:500]}\n"
+            f"エラー：{type(exc).__name__}: {exc}"
+        )
+        try:
+            with ApiClient(configuration) as api_client:
+                MessagingApi(api_client).reply_message(ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[TextMessage(text=ERROR_FALLBACK_MESSAGE)],
+                ))
+        except Exception:
+            app.logger.exception("error fallback reply failed")
+
+
+def _handle_message(event):
     text = event.message.text.strip()
 
     if text == "管理者ID確認":
@@ -946,8 +1005,19 @@ def handle_message(event):
             nickname = "あなた"
 
         line_user_id = event.source.user_id
+        active_orders = [] if wants_course_menu(text) else active_orders_for(line_user_id)
 
-        if is_free_reading_request(text):
+        if active_orders:
+            # お支払い済みのお客様。占いや決まり文句を返さず、受け取ったことだけ伝えてオーナーに回す。
+            forward_to_admin(nickname, line_user_id, text, active_orders)
+            reply = TextMessage(text=RECEIPT_MESSAGE.format(nickname=nickname))
+
+        elif is_consultation_submission(text):
+            # 鑑定の情報らしい文。突き放さず受け取り、オーナーに回す。
+            forward_to_admin(nickname, line_user_id, text)
+            reply = TextMessage(text=RECEIPT_MESSAGE.format(nickname=nickname))
+
+        elif is_free_reading_request(text):
             reply = TextMessage(text=free_reading_message())
 
         elif text == "お試し鑑定希望":
@@ -967,12 +1037,6 @@ def handle_message(event):
                 text="プレミアム鑑定のお支払いへお進みください。",
                 quick_reply=course_quick_reply(line_user_id, nickname, "premium"),
             )
-
-        elif is_consultation_submission(text):
-            reply = TextMessage(text=(
-                "LINEメッセージだけでは鑑定情報の受付は完了しません。\n\n"
-                "決済完了後に表示される専用ページで、記入漏れがないようすべての項目を入力してください。"
-            ))
 
         elif matched_zodiac:
             # 無料鑑定に有料メニューを即同梱しない（無料→信頼構築→提案の順にするため）。

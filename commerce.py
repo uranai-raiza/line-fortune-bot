@@ -268,7 +268,8 @@ class SheetsStore:
         if not current:
             self.worksheet.update([SHEET_HEADERS], "A1")
             return
-        if current != SHEET_HEADERS:
+        # 左から36列が合っていればよい。右にメモ列などを足しても止まらない。
+        if current[:len(SHEET_HEADERS)] != SHEET_HEADERS:
             raise RuntimeError("スプレッドシートの見出しが設計と一致していません")
 
     def _find_row(self, session_id):
@@ -320,6 +321,42 @@ class SheetsStore:
             )
             return self._find_row(session_id), True
 
+    def _update_cells(self, row_number, current, updates):
+        row_values = [current.get(h, "") for h in SHEET_HEADERS]
+        for key, value in updates.items():
+            row_values[SHEET_HEADERS.index(key)] = value
+        end_column = gspread.utils.rowcol_to_a1(1, len(SHEET_HEADERS)).rstrip("1")
+        self.worksheet.update([row_values], f"A{row_number}:{end_column}{row_number}")
+
+    def claim_intake_guide(self, session_id, event_id):
+        """入力案内LINEをまだ誰も送っていなければ印を付けて True を返す。
+
+        StripeイベントID欄を「案内を送った印」に使う。入力ページが先に行を作ったとき（欄が空）は
+        Webhookがここで印を付けて案内を1回だけ送る。Stripeの送り直しでは印があるので送らない。
+        """
+        with self._lock:
+            found = self.get_order(session_id)
+            if not found:
+                return False
+            row_number, current = found
+            if current.get("StripeイベントID"):
+                return False
+            self._update_cells(row_number, current, {"StripeイベントID": event_id or "guide-sent"})
+            return True
+
+    def orders_for_line_user(self, line_user_id):
+        """そのLINEの人の注文の行を全部返す（見出しで引ける dict の一覧）。"""
+        if not line_user_id:
+            return []
+        rows = self.worksheet.get_all_values()[1:]
+        column = SHEET_HEADERS.index("LINE識別番号")
+        orders = []
+        for values in rows:
+            values = values + [""] * (len(SHEET_HEADERS) - len(values))
+            if values[column] == line_user_id:
+                orders.append(dict(zip(SHEET_HEADERS, values)))
+        return orders
+
     def save_intake(self, session_id, data):
         with self._lock:
             found = self.get_order(session_id)
@@ -366,6 +403,41 @@ class SheetsStore:
         values[SHEET_HEADERS.index("管理者通知日時")] = now_iso()
         end_column = gspread.utils.rowcol_to_a1(1, len(SHEET_HEADERS)).rstrip("1")
         self.worksheet.update([values], f"A{row_number}:{end_column}{row_number}")
+
+
+DUPLICATE_WINDOW_MINUTES = 30
+
+
+def is_active_order(order):
+    """お支払い済みで、まだ鑑定書を送っておらず、返金もしていない注文か。"""
+    return (
+        order.get("決済状態") == "支払い済み"
+        and order.get("顧客への送付状態") != "送付済み"
+        and not order.get("返金状態", "").startswith("返金済み")
+    )
+
+
+def recent_same_course_orders(orders, course_label, exclude_session_id="", now=None,
+                              minutes=DUPLICATE_WINDOW_MINUTES):
+    """同じコースを、指定の分数以内に払った別の注文を返す。"""
+    current = now or datetime.now(JST)
+    found = []
+    for order in orders:
+        if order.get("Stripe決済番号") == exclude_session_id:
+            continue
+        if order.get("コース") != course_label or order.get("決済状態") != "支払い済み":
+            continue
+        if order.get("返金状態", "").startswith("返金済み"):
+            continue
+        try:
+            paid_at = datetime.fromisoformat(order.get("決済日時", ""))
+        except ValueError:
+            continue
+        if paid_at.tzinfo is None:
+            paid_at = paid_at.replace(tzinfo=JST)
+        if timedelta(0) <= current - paid_at <= timedelta(minutes=minutes):
+            found.append(order)
+    return found
 
 
 STEP_SHEET_HEADERS = ["LINE識別番号", "現在の段階", "更新日時"]

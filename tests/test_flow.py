@@ -95,8 +95,9 @@ class FlowTests(unittest.TestCase):
                 response = app.app.test_client().get(f"/checkout/start/standard?token={token}")
         self.assertEqual(response.status_code, 502)
         self.assertIn("決済画面を開けませんでした", response.get_data(as_text=True))
-        self.assertIn("course=standard", logs.output[0])
-        self.assertIn("does not have access", logs.output[0])
+        stripe_log = [line for line in logs.output if "checkout session create failed" in line][0]
+        self.assertIn("course=standard", stripe_log)
+        self.assertIn("does not have access", stripe_log)
 
     def test_checkout_start_redirects_to_new_stripe_session_each_time(self):
         token = create_checkout_token("U123", "表示名")
@@ -205,8 +206,7 @@ class FlowTests(unittest.TestCase):
         self.assertIn("プレミアム鑑定　3,000円", app.COURSE_MENU_TEXT)
         quick_reply = app.course_quick_reply("U1", "表示名")
         self.assertEqual(quick_reply.items[2].action.label, "プレミアム 3,000円")
-        with patch.object(app, "STRIPE_PREMIUM_URL", "https://stripe.test/premium", create=True):
-            self.assertIn("3,000円", app.premium_message("表示名"))
+        self.assertIn("プレミアム鑑定　3,000円", app.STEP2_COURSE_TEXT)
 
     def test_sheet_starts_with_requested_customer_columns(self):
         self.assertEqual(SHEET_HEADERS[:12], [

@@ -56,6 +56,7 @@ class PaymentWebhookTests(unittest.TestCase):
     def test_new_payment_writes_sheet_and_sends_intake_guide_to_customer(self):
         store = MagicMock()
         store.upsert_payment.return_value = (2, True)
+        store.orders_for_line_user.return_value = []
         response, pushed = self.post_webhook(store)
         self.assertEqual(response.status_code, 200)
         store.upsert_payment.assert_called_once()
@@ -69,6 +70,7 @@ class PaymentWebhookTests(unittest.TestCase):
     def test_retried_event_does_not_send_guide_twice(self):
         store = MagicMock()
         store.upsert_payment.return_value = (2, False)
+        store.claim_intake_guide.return_value = False
         response, pushed = self.post_webhook(store)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(pushed, [])
