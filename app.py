@@ -1,4 +1,6 @@
+import collections
 import os
+import threading
 import time
 import unicodedata
 from datetime import datetime, timedelta, timezone
@@ -1008,12 +1010,41 @@ def webhook():
     signature = request.headers.get("X-Line-Signature", "")
     body = request.get_data(as_text=True)
     try:
-        handler.handle(body, signature)
+        payload = handler.parser.parse(body, signature, as_payload=True)
     except InvalidSignatureError:
         abort(400)
-    except Exception:
-        app.logger.exception("webhook handling failed")
+    # LINEは2秒以内に返事がないと「失敗」と見て同じ知らせを送り直してくる。
+    # 署名だけ確かめてすぐ返し、中の処理（台帳を読む・返事をする）は裏で行う。
+    threading.Thread(target=process_line_events, args=(payload.events,), daemon=True).start()
     return "OK"
+
+
+_seen_line_events = collections.OrderedDict()
+_seen_line_events_lock = threading.Lock()
+
+
+def first_time_line_event(event_id):
+    """同じ知らせ（送り直し）を2回処理しない。覚えるのは直近2000件まで。"""
+    if not event_id:
+        return True
+    with _seen_line_events_lock:
+        if event_id in _seen_line_events:
+            return False
+        _seen_line_events[event_id] = True
+        while len(_seen_line_events) > 2000:
+            _seen_line_events.popitem(last=False)
+        return True
+
+
+def process_line_events(events):
+    for event in events:
+        try:
+            if not first_time_line_event(getattr(event, "webhook_event_id", "") or ""):
+                continue
+            if isinstance(event, MessageEvent) and isinstance(event.message, TextMessageContent):
+                handle_message(event)
+        except Exception:
+            app.logger.exception("line event processing failed")
 
 
 RECEIPT_MESSAGE = (
