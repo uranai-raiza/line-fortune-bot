@@ -210,9 +210,16 @@ def create_checkout_session(course, line_user_id, display_name, base_url):
     return session
 
 
+def stripe_to_dict(obj):
+    # stripe 13以降の StripeObject は dict ではなく .get() が使えないため、ふつうの dict に直してから使う
+    if hasattr(obj, "to_dict"):
+        return obj.to_dict()
+    return dict(obj)
+
+
 def retrieve_paid_session(session_id):
     configure_stripe()
-    session = stripe.checkout.Session.retrieve(session_id)
+    session = stripe_to_dict(stripe.checkout.Session.retrieve(session_id))
     if session.get("payment_status") != "paid":
         raise ValueError("決済完了を確認できません")
     course = (session.get("metadata") or {}).get("course")
@@ -277,6 +284,8 @@ class SheetsStore:
         return row, dict(zip(SHEET_HEADERS, values))
 
     def upsert_payment(self, session, event_id=""):
+        """決済の行を入れる。戻り値は (行番号, 今回新しく入れたか)。"""
+        session = stripe_to_dict(session)
         session_id = session["id"]
         metadata = session.get("metadata") or {}
         course = metadata.get("course", "")
@@ -286,7 +295,7 @@ class SheetsStore:
         with self._lock:
             found = self.get_order(session_id)
             if found:
-                return found[0]
+                return found[0], False
             row = {header: "" for header in SHEET_HEADERS}
             row.update({
                 "Stripe決済番号": session_id,
@@ -309,7 +318,7 @@ class SheetsStore:
                 [row[h] for h in SHEET_HEADERS],
                 value_input_option=gspread.utils.ValueInputOption.user_entered,
             )
-            return self._find_row(session_id)
+            return self._find_row(session_id), True
 
     def save_intake(self, session_id, data):
         with self._lock:

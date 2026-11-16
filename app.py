@@ -29,6 +29,7 @@ from commerce import (
     create_checkout_token,
     read_checkout_token,
     retrieve_paid_session,
+    stripe_to_dict,
     validate_intake,
     verify_webhook,
 )
@@ -688,11 +689,87 @@ def stripe_webhook():
     except (RuntimeError, ValueError, stripe.error.SignatureVerificationError):
         abort(400)
 
-    if event["type"] in ("checkout.session.completed", "checkout.session.async_payment_succeeded"):
-        session = event["data"]["object"]
-        if session.get("payment_status") == "paid":
-            SheetsStore().upsert_payment(session, event.get("id", ""))
+    if event["type"] not in ("checkout.session.completed", "checkout.session.async_payment_succeeded"):
+        return "OK"
+
+    session = stripe_to_dict(event["data"]["object"])
+    if session.get("payment_status") != "paid":
+        return "OK"
+
+    session_id = session.get("id", "")
+    metadata = session.get("metadata") or {}
+    course = metadata.get("course", "")
+    try:
+        _, created = SheetsStore().upsert_payment(session, event["id"])
+    except Exception as exc:
+        # 書けなかったら500を返してStripeにやり直させ、オーナーにもすぐ知らせる
+        app.logger.exception("stripe webhook: sheet write failed session=%s", session_id)
+        notify_admin_alert(
+            "⚠️ お支払いを受けましたが、鑑定管理シートに書き込めませんでした。\n\n"
+            f"Stripe決済番号：\n{session_id}\n\n"
+            f"コース：{PLANS.get(course, {}).get('label', course)}\n"
+            f"エラー：{type(exc).__name__}: {exc}"
+        )
+        return "sheet write failed", 500
+
+    if created:
+        try:
+            send_intake_guide(session)
+        except Exception as exc:
+            app.logger.exception("stripe webhook: intake guide push failed session=%s", session_id)
+            notify_admin_alert(
+                "⚠️ お支払いを受けましたが、お客様のLINEに入力の案内を送れませんでした。\n"
+                "お客様に入力ページを手で伝えてください。\n\n"
+                f"Stripe決済番号：\n{session_id}\n\n"
+                f"入力ページ：\n{intake_url(session_id)}\n\n"
+                f"エラー：{type(exc).__name__}: {exc}"
+            )
     return "OK"
+
+
+def intake_url(session_id):
+    return f"{public_base_url()}/intake?session_id={session_id}"
+
+
+def send_intake_guide(session):
+    """お支払いのあと、お客様のLINEに入力ページの案内を1通送る。"""
+    metadata = session.get("metadata") or {}
+    line_user_id = metadata.get("line_user_id", "")
+    if not line_user_id:
+        raise RuntimeError("決済にLINE識別番号が付いていません")
+    plan = PLANS[metadata["course"]]
+    name = (metadata.get("line_display_name") or "").strip()
+    greeting = f"{name}さん🌙" if name else "こんにちは🌙"
+    message = (
+        f"{greeting}\n"
+        "お支払いありがとうございます。\n"
+        f"{plan['label']}、確かに承りました。\n\n"
+        "鑑定に必要な内容を、下のページから入力してくださいね。\n"
+        f"{intake_url(session['id'])}\n\n"
+        "入力していただいた内容をもとに、星の動きと数秘術から丁寧に読み解いてまいります。\n"
+        "ページが開けないときは、このLINEでそのまま教えてもらえたらうれしいです。"
+    )
+    with ApiClient(configuration) as api_client:
+        MessagingApi(api_client).push_message(PushMessageRequest(
+            to=line_user_id,
+            messages=[TextMessage(text=message)],
+        ))
+
+
+def notify_admin_alert(text):
+    """オーナーのLINEに異常を知らせる。ここで失敗しても本処理は止めない。"""
+    try:
+        admin_user_id = os.environ.get("ADMIN_LINE_USER_ID", "")
+        if not admin_user_id:
+            app.logger.error("ADMIN_LINE_USER_ID がないため異常を知らせられません: %s", text)
+            return
+        with ApiClient(configuration) as api_client:
+            MessagingApi(api_client).push_message(PushMessageRequest(
+                to=admin_user_id,
+                messages=[TextMessage(text=text)],
+            ))
+    except Exception:
+        app.logger.exception("admin alert push failed")
 
 
 def notify_admin(session_id, customer_name, course_label):
@@ -725,12 +802,31 @@ def intake():
         store = SheetsStore()
         store.upsert_payment(session)
     except (RuntimeError, ValueError, stripe.error.StripeError) as exc:
+        app.logger.error("intake failed session=%s error=%s: %s", session_id, type(exc).__name__, exc)
+        notify_admin_alert(
+            "⚠️ お客様が入力ページを開けませんでした。\n\n"
+            f"Stripe決済番号：\n{session_id or '未確認'}\n\n"
+            f"エラー：{type(exc).__name__}: {exc}"
+        )
         return render_template(
             "intake_complete.html",
             title="決済を確認できませんでした",
-            message=str(exc),
+            message=f"{exc}。お手数ですが、LINEでそのままお知らせください。",
             session_id=session_id or "未確認",
         ), 400
+    except Exception as exc:
+        app.logger.exception("intake unexpected error session=%s", session_id)
+        notify_admin_alert(
+            "⚠️ お客様が入力ページを開けませんでした（想定外のエラー）。\n\n"
+            f"Stripe決済番号：\n{session_id or '未確認'}\n\n"
+            f"エラー：{type(exc).__name__}: {exc}"
+        )
+        return render_template(
+            "intake_complete.html",
+            title="入力ページを開けませんでした",
+            message="お支払いは完了しています。お手数ですが、LINEでそのままお知らせください。こちらからご案内いたします。",
+            session_id=session_id or "未確認",
+        ), 500
 
     existing = store.get_order(session_id)
     if existing and existing[1].get("鑑定情報入力状態") == "入力済み":
