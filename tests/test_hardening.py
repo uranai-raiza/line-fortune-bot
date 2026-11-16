@@ -75,6 +75,18 @@ class LineReplyTests(unittest.TestCase):
         self.assertEqual(pushes[0].to, "Uadmin")
         self.assertIn("蠍座", pushes[0].messages[0].text)
 
+    def test_any_unrecognized_message_gets_course_buttons(self):
+        # 言い方がどれでも、行き止まりにしない（チャンスを逃さない）
+        for text in ("鑑定", "占ってほしいんですけど", "見てもらえますか？", "こんにちは", "いくらですか", "ありがとうございました",
+                     "彼とどうなるか知りたい", "お願いします"):
+            with self.subTest(text=text):
+                replies, pushes, _ = self.send(text)
+                self.assertEqual(len(replies), 1)
+                message = replies[0][0]
+                self.assertEqual([i.action.label for i in message.quick_reply.items],
+                                 ["お試し 980円", "スタンダード 2,000円", "プレミアム 3,000円"])
+                self.assertEqual(pushes, [])  # 無料の返事だけ。ボットから自分で送る通数は使わない
+
     def test_paid_customer_can_still_choose_course(self):
         replies, pushes, _ = self.send("プレミアム鑑定希望", orders=[order()])
         self.assertIn("プレミアム鑑定のお支払い", replies[0][0].text)

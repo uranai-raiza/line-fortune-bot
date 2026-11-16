@@ -298,9 +298,11 @@ def build_fortune_message(zodiac, nickname, now=None):
     base = FORTUNES[zodiac].format(Nickname=nickname)
     return base.replace(marker, daily_section + marker, 1)
 
+# どんな言い方のメッセージでも、行き止まりにしない。分からない言葉には、必ずこの返事とコースのボタンを出す。
 DEFAULT_MESSAGE = (
-    "星座名（例：牡羊座、やぎ座）を送ると今日の運勢をお伝えします🔮\n"
-    "鑑定をご希望の方は「鑑定希望」とお送りください。"
+    "メッセージありがとうございます🌙\n"
+    "星座占いは、星座の名前（例：牡羊座、やぎ座）を送ってくださいね。\n"
+    "鑑定をご希望のときは、下のボタンからコースをお選びくださいね🔮"
 )
 
 
@@ -1211,7 +1213,10 @@ def _handle_message(event):
             )
 
         else:
-            reply = TextMessage(text=DEFAULT_MESSAGE)
+            reply = TextMessage(
+                text=DEFAULT_MESSAGE,
+                quick_reply=course_quick_reply(line_user_id, nickname),
+            )
 
         messages = reply if isinstance(reply, list) else [reply]
         try:
