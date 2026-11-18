@@ -47,6 +47,7 @@ class LineReplyTests(unittest.TestCase):
             store.orders_for_line_user.return_value = orders or []
         step_store = MagicMock()
         step_store.return_value.advance_stage.return_value = 1
+        step_store.return_value.get_profile.return_value = {}
         with patch("app.SheetsStore", return_value=store), \
                 patch("app.StepProgressStore", step_store), \
                 patch("app.MessagingApi") as api:
@@ -83,8 +84,9 @@ class LineReplyTests(unittest.TestCase):
                 replies, pushes, _ = self.send(text)
                 self.assertEqual(len(replies), 1)
                 message = replies[0][0]
-                self.assertEqual([i.action.label for i in message.quick_reply.items],
-                                 ["お試し 980円", "スタンダード 2,000円", "プレミアム 3,000円"])
+                labels = [i.action.label for i in message.quick_reply.items]
+                for course in ("お試し 980円", "スタンダード 2,000円", "プレミアム 6,000円"):
+                    self.assertIn(course, labels)
                 self.assertEqual(pushes, [])  # 無料の返事だけ。ボットから自分で送る通数は使わない
 
     def test_paid_customer_can_still_choose_course(self):
@@ -94,11 +96,11 @@ class LineReplyTests(unittest.TestCase):
 
     def test_delivered_order_is_not_active(self):
         replies, _, _ = self.send("牡羊座", orders=[order(**{"顧客への送付状態": "送付済み"})])
-        self.assertIn("あなた個人の占いではありません", replies[0][0].text)
+        self.assertIn("牡羊座のあなたですね", replies[0][0].text)
 
     def test_sheet_down_falls_back_to_normal_reply(self):
         replies, _, _ = self.send("牡羊座", store_error=RuntimeError("sheet down"))
-        self.assertIn("あなた個人の占いではありません", replies[0][0].text)
+        self.assertIn("牡羊座のあなたですね", replies[0][0].text)
 
     def test_unpaid_consultation_submission_is_received_and_forwarded(self):
         text = "お名前：まき\n生年月日：1990/4/2\nお相手：たろう\n相談内容：彼の本音"
@@ -114,7 +116,7 @@ class LineReplyTests(unittest.TestCase):
         event.source.user_id = "U123"
         event.reply_token = "reply-token"
         with patch("app.StepProgressStore", step_store), patch("app.MessagingApi") as api, \
-                patch("app.SheetsStore", side_effect=RuntimeError("no sheet")):
+                patch("app.SheetsStore", side_effect=RuntimeError("no sheet")),                 patch("app.course_quick_reply", side_effect=RuntimeError("button broken")):
             api.return_value.get_profile.return_value.display_name = "まき"
             app.handle_message(event)
         reply = api.return_value.reply_message.call_args.args[0].messages[0].text

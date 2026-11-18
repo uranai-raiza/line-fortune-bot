@@ -113,7 +113,7 @@ class FlowTests(unittest.TestCase):
         self.assertEqual(first.headers["Location"], "https://checkout.stripe.test/a")
         self.assertEqual(second.headers["Location"], "https://checkout.stripe.test/b")
         self.assertEqual(create.call_count, 2)
-        self.assertEqual(create.call_args.kwargs["line_items"][0]["price_data"]["unit_amount"], 3000)
+        self.assertEqual(create.call_args.kwargs["line_items"][0]["price_data"]["unit_amount"], 6000)
 
     def test_intake_shows_error_page_when_stripe_fails(self):
         error = app.stripe.error.APIConnectionError("network down")
@@ -130,7 +130,7 @@ class FlowTests(unittest.TestCase):
             self.assertNotIn("本鑑定でわかること", fortune, zodiac)
             self.assertIn("あなた個人の占いではありません。", fortune, zodiac)
             self.assertGreaterEqual(len(app.build_fortune_message(zodiac, "表示名")), 400, zodiac)
-            message = fortune.format(Nickname="友だちの表示名") + "\n\n" + app.COURSE_MENU_TEXT
+            message = fortune.format(Nickname="友だちの表示名") + "\n\n" + app.funnel.COURSE_TEXT
             self.assertLessEqual(len(message), 5000, zodiac)
 
     def test_daily_fortune_changes_by_day_but_not_within_same_day(self):
@@ -143,24 +143,25 @@ class FlowTests(unittest.TestCase):
         self.assertNotEqual(message, app.build_fortune_message("山羊座", "Aさん", tomorrow))
         self.assertIn("🌙 8月11日の恋愛運", message)
         self.assertIn("ここまでは、山羊座が本来持つ恋愛傾向と運勢です。", message)
-        self.assertLessEqual(len(message + "\n\n" + app.COURSE_MENU_TEXT), 5000)
+        self.assertLessEqual(len(message + "\n\n" + app.funnel.COURSE_TEXT), 5000)
 
     def test_payment_notice_is_shown_before_course_buttons(self):
         notice = "ボタンを押すと、お支払い画面が開きます"
-        self.assertIn(notice, app.COURSE_MENU_TEXT)
-        self.assertLess(app.COURSE_MENU_TEXT.index(notice), app.COURSE_MENU_TEXT.index("ご希望のコースをお選びください"))
+        self.assertIn(notice, app.funnel.COURSE_TEXT)
+        self.assertLess(app.funnel.COURSE_TEXT.index(notice), app.funnel.COURSE_TEXT.index("ご希望のコースを、下から選んでくださいね"))
 
     def test_continue_flow_restarts_on_zodiac_and_ends_with_course_menu(self):
-        stages = {}
+        profiles = {"U123": {"星座": "魚座", "テーマ": "仕事"}}
 
         class FakeStepStore:
             def advance_stage(self, line_user_id):
-                stages[line_user_id] = stages.get(line_user_id, 0) + 1
-                return stages[line_user_id]
+                return 1
 
-            def reset_stage(self, line_user_id):
-                if line_user_id in stages:
-                    stages[line_user_id] = 0
+            def save_start(self, line_user_id, birthdate, zodiac, number):
+                profiles[line_user_id] = {"生年月日": birthdate, "星座": zodiac, "数秘": number}
+
+            def get_profile(self, line_user_id):
+                return profiles.get(line_user_id, {})
 
         def send(text):
             event = unittest.mock.MagicMock()
@@ -172,41 +173,28 @@ class FlowTests(unittest.TestCase):
                 app.handle_message(event)
             return api.return_value.reply_message.call_args.args[0].messages
 
-        stages["U123"] = 5  # 以前のテストで最後まで進んだ人
-        first = send("魚座")[0].text
-        self.assertIn("あなた個人の占いではありません。", first)
-        self.assertIn("あなたが思いを寄せるそのお相手との縁は、本物なのか。", first)
-        self.assertNotIn("本鑑定でわかること", first)
-        self.assertTrue(first.endswith("興味がある方は「続き」と送ってくださいね🌙"))
-        step1 = send("続き")
-        self.assertEqual(len(step1), 1)
-        self.assertIn("まず、私の自己紹介をしますね。", step1[0].text)
-        self.assertIn("この3ヶ月で、146人の方に", step1[0].text)
-        step2 = send("続き")
-        self.assertEqual(len(step2), 3)
-        self.assertIn("星の配置と生年月日から紐解いていきます", step2[0].text)
-        self.assertEqual(step2[1].original_content_url, "https://example.test/static/kanteisho-sample.jpg")
-        self.assertEqual(step2[1].preview_image_url, "https://example.test/static/kanteisho-sample-preview.jpg")
-        self.assertIn("A4で9枚", step2[2].text)
+        first = send("魚座")[0]
+        self.assertIn("魚座のあなたですね", first.text)
+        self.assertEqual([i.action.label for i in first.quick_reply.items], app.funnel.THEMES)
+        profiles["U123"]["テーマ"] = "仕事"
+        step = send("続き")
+        self.assertEqual(len(step), 4)
+        self.assertIn("この3ヶ月で146人の方に", step[0].text)
+        self.assertIn("今の仕事を、このまま続けていいの？", step[1].text)
+        self.assertEqual(step[2].original_content_url, "https://example.test/static/kanteisho-sample.jpg")
+        self.assertEqual(step[2].preview_image_url, "https://example.test/static/kanteisho-sample-preview.jpg")
+        self.assertIn("プレミアム鑑定　6,000円", step[3].text)
         self.assertEqual(
-            [item.action.label for item in step2[2].quick_reply.items],
-            ["お試し 980円", "スタンダード 2,000円", "プレミアム 3,000円"],
+            [item.action.label for item in step[3].quick_reply.items],
+            ["お試し 980円", "スタンダード 2,000円", "プレミアム 6,000円", "今回はやめておきます"],
         )
-        for _ in range(2):
-            last = send("続き")[0]
-            self.assertTrue(last.text.startswith("鑑定希望ありがとうございます🌙"))
-            self.assertIn("スタンダード鑑定がおすすめです", last.text)
-            self.assertEqual(
-                [item.action.label for item in last.quick_reply.items],
-                ["お試し 980円", "スタンダード 2,000円", "プレミアム 3,000円"],
-            )
 
     def test_premium_price_is_consistent(self):
-        self.assertEqual(PLANS["premium"]["amount"], 3000)
-        self.assertIn("プレミアム鑑定　3,000円", app.COURSE_MENU_TEXT)
+        self.assertEqual(PLANS["premium"]["amount"], 6000)
+        self.assertIn("プレミアム鑑定　6,000円", app.funnel.COURSE_TEXT)
         quick_reply = app.course_quick_reply("U1", "表示名")
-        self.assertEqual(quick_reply.items[2].action.label, "プレミアム 3,000円")
-        self.assertIn("プレミアム鑑定　3,000円", app.STEP2_COURSE_TEXT)
+        self.assertEqual(quick_reply.items[2].action.label, "プレミアム 6,000円")
+        self.assertIn(3000, PLANS["premium"]["accepted_amounts"])
 
     def test_sheet_starts_with_requested_customer_columns(self):
         self.assertEqual(SHEET_HEADERS[:12], [
@@ -264,11 +252,11 @@ class FlowTests(unittest.TestCase):
         product_data = kwargs["line_items"][0]["price_data"]["product_data"]
         self.assertEqual(product_data["name"], "【スタンダード】パーソナル星座鑑定")
         for expected in (
-            "気になるお相手の本音と、この恋が進む可能性",
-            "相手があなたに見せていない本音",
-            "今は連絡するべきか、待つべきか",
+            "恋愛・仕事・お金・人間関係など",
+            "今は動くべきか、待つべきか",
             "ご質問2つに、約2,500文字",
-            "相手の気持ちと次の一歩を、まとめて確かめたい方",
+            "お名前入りの護符をお付けします",
+            "二つのお悩みと次の一歩を、まとめて確かめたい方",
         ):
             self.assertIn(expected, product_data["description"])
         self.assertNotIn("【ご注意事項】", product_data["description"])
@@ -286,10 +274,10 @@ class FlowTests(unittest.TestCase):
     def test_step2_falls_back_to_text_when_image_reply_fails(self):
         class FakeStepStore:
             def advance_stage(self, line_user_id):
-                return 2
+                return 1
 
-            def reset_stage(self, line_user_id):
-                pass
+            def get_profile(self, line_user_id):
+                return {"星座": "牡羊座", "テーマ": "恋愛"}
 
         event = unittest.mock.MagicMock()
         event.message.text = "続き"
@@ -302,16 +290,17 @@ class FlowTests(unittest.TestCase):
                 app.handle_message(event)
         calls = api.return_value.reply_message.call_args_list
         self.assertEqual(len(calls), 2)
-        self.assertEqual(len(calls[0].args[0].messages), 3)
+        self.assertEqual(len(calls[0].args[0].messages), 4)
         retried = calls[1].args[0].messages
-        self.assertEqual(len(retried), 2)
+        self.assertEqual(len(retried), 3)
         self.assertFalse(any(isinstance(m, app.ImageMessage) for m in retried))
         self.assertIsNotNone(retried[-1].quick_reply)
 
     def test_step2_texts_fit_line_limits(self):
-        self.assertLessEqual(len(app.STEP2_READING_TEXT.format(nickname="あ" * 20)), 5000)
-        self.assertLessEqual(len(app.STEP2_COURSE_TEXT), 5000)
-        self.assertLessEqual(len(app.STEP_MESSAGES[1].format(nickname="あ" * 20)), 5000)
+        for theme in app.funnel.THEMES:
+            self.assertLessEqual(len(app.funnel.theme_answers_text(theme)), 5000)
+        self.assertLessEqual(len(app.funnel.intro_text("あ" * 20, "牡羊座")), 5000)
+        self.assertLessEqual(len(app.funnel.COURSE_TEXT), 5000)
 
     def test_sample_images_are_served_within_line_limits(self):
         client = app.app.test_client()
@@ -357,6 +346,117 @@ class FlowTests(unittest.TestCase):
         self.assertIn("スタンダード鑑定", html)
         self.assertIn("質問を2つ", html)
         self.assertIn("記入漏れがある場合は鑑定を行うことができません", html)
+
+class NewFunnelTests(unittest.TestCase):
+    """2026-11-18：生年月日→テーマ→テーマ別の無料診断→続き→コース→今回はやめておきます。"""
+
+    def test_zodiac_and_life_path_from_birthdate(self):
+        from datetime import date
+        f = app.funnel
+        self.assertEqual(f.zodiac_from_date(date(1961, 5, 3)), "牡牛座")
+        self.assertEqual(f.life_path_number(date(1961, 5, 3)), 7)
+        for d, sign in [((1, 1), "山羊座"), ((1, 20), "水瓶座"), ((3, 20), "魚座"), ((3, 21), "牡羊座"),
+                        ((12, 21), "射手座"), ((12, 22), "山羊座"), ((8, 23), "乙女座")]:
+            self.assertEqual(f.zodiac_from_date(date(1990, *d)), sign, d)
+        self.assertEqual(f.life_path_number(date(1992, 9, 29)), 5)  # 1+9+9+2+0+9+2+9=41→5
+        self.assertEqual(f.life_path_number(date(1960, 8, 5)), 11)  # 1+9+6+0+0+8+0+5=29→11（そのまま）
+        self.assertIn(f.life_path_number(date(1975, 1, 1)), range(1, 34))
+
+    def test_every_theme_reading_exists_for_every_sign_and_number(self):
+        f = app.funnel
+        for theme in f.THEMES:
+            for zodiac in app.FORTUNES:
+                for number in (None, 1, 7, 11, 22, 33):
+                    text = f.free_reading_text("パパ", zodiac, theme, number,
+                                               love_tendency=app.love_tendency(zodiac),
+                                               love_daily=app.DAILY_LOVE_THEMES)
+                    self.assertNotIn("あなた個人の占いではありません", text)
+                    self.assertIn("「続き」を押してくださいね", text)
+                    self.assertLessEqual(len(text), 5000)
+                    if number:
+                        self.assertIn(f"数秘{number}", text)
+
+    def test_love_tendency_drops_header_and_old_bridge(self):
+        text = app.love_tendency("牡羊座")
+        self.assertTrue(text.startswith("牡羊座のあなたは、恋をすると"))
+        self.assertNotIn("ここまでは", text)
+        self.assertNotIn("さん🌸", text)
+
+    def _postback(self, data, params=None, profile=None):
+        event = unittest.mock.MagicMock()
+        event.postback.data = data
+        event.postback.params = params
+        event.source.user_id = "U123"
+        event.reply_token = "reply-token"
+        store = unittest.mock.MagicMock()
+        store.return_value.get_profile.return_value = profile or {}
+        with patch("app.StepProgressStore", store), patch("app.MessagingApi") as api:
+            api.return_value.get_profile.return_value.display_name = "パパ"
+            app.handle_postback(event)
+        return api.return_value.reply_message.call_args.args[0].messages[0], store
+
+    def test_birthdate_postback_asks_theme_and_saves(self):
+        message, store = self._postback("action=birthdate", {"date": "1961-05-03"})
+        self.assertIn("5月3日生まれのあなたは、牡牛座ですね", message.text)
+        self.assertEqual([i.action.label for i in message.quick_reply.items], app.funnel.THEMES)
+        store.return_value.save_start.assert_called_once_with("U123", "1961-05-03", "牡牛座", 7)
+
+    def test_theme_postback_returns_reading_with_number_and_continue_button(self):
+        message, store = self._postback("action=theme&t=お金", profile={"星座": "牡牛座", "数秘": "7"})
+        self.assertIn("牡牛座・数秘7のあなたのお金運", message.text)
+        self.assertEqual([i.action.label for i in message.quick_reply.items], ["続き"])
+        store.return_value.save_theme.assert_called_once_with("U123", "お金")
+
+    def test_theme_without_profile_restarts_with_birthdate_button(self):
+        message, _ = self._postback("action=theme&t=仕事", profile={})
+        self.assertIn("生年月日を選ぶ", message.text)
+        self.assertEqual(message.quick_reply.items[0].action.type, "datetimepicker")
+
+    def test_decline_and_reason_are_recorded(self):
+        message, store = self._postback("action=decline")
+        self.assertEqual([i.action.label for i in message.quick_reply.items], app.funnel.DECLINE_REASONS)
+        store.return_value.save_decline.assert_called_once()
+        message, store = self._postback("action=reason&r=値段が合わない")
+        self.assertIn("980円のお試し鑑定", message.text)
+        store.return_value.save_decline.assert_called_once_with("U123", "値段が合わない")
+
+    def test_free_text_after_decline_is_forwarded_with_three_day_notice(self):
+        event = unittest.mock.MagicMock()
+        event.message.text = "実は仕事のことで悩んでいて"
+        event.source.user_id = "U123"
+        event.reply_token = "reply-token"
+        store = unittest.mock.MagicMock()
+        store.return_value.get_profile.return_value = {"見送りの理由": "悩みに合うコースがない"}
+        with patch("app.StepProgressStore", store), patch("app.SheetsStore") as sheets, \
+                patch("app.MessagingApi") as api, patch.dict(os.environ, {"ADMIN_LINE_USER_ID": "Uadmin"}):
+            sheets.return_value.orders_for_line_user.return_value = []
+            api.return_value.get_profile.return_value.display_name = "パパ"
+            app.handle_message(event)
+        reply = api.return_value.reply_message.call_args.args[0].messages[0].text
+        self.assertIn("3日以内", reply)
+        self.assertTrue(api.return_value.push_message.called)
+
+    def test_free_diagnosis_word_starts_with_birthdate_button(self):
+        event = unittest.mock.MagicMock()
+        event.message.text = "無料診断"
+        event.source.user_id = "U123"
+        event.reply_token = "reply-token"
+        with patch("app.StepProgressStore"), patch("app.SheetsStore") as sheets, patch("app.MessagingApi") as api:
+            sheets.return_value.orders_for_line_user.return_value = []
+            api.return_value.get_profile.return_value.display_name = "パパ"
+            app.handle_message(event)
+        message = api.return_value.reply_message.call_args.args[0].messages[0]
+        self.assertIn("生年月日を選ぶ", message.text)
+        self.assertEqual(message.quick_reply.items[0].action.type, "datetimepicker")
+
+    def test_intake_without_partner_is_accepted(self):
+        form = {
+            "customer_name": "Aさん", "customer_birth_date": "1961-05-03", "customer_birth_time": "不明",
+            "customer_birth_place": "大阪府", "customer_zodiac": "牡牛座", "situation": "転職を考えています",
+            "question_1": "今の仕事を続けていいか", "question_2": "動く時期はいつか",
+            "consent_accuracy": "yes", "consent_privacy": "yes",
+        }
+        self.assertIsNone(validate_intake(form, 2))
 
 
 if __name__ == "__main__":

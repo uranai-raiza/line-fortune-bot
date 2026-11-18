@@ -42,25 +42,28 @@ PLANS = {
     "standard": {
         "label": "スタンダード鑑定", "checkout_name": "【スタンダード】パーソナル星座鑑定",
         "amount": 2000, "questions": 2, "characters": "約2,500文字",
-        "description": """気になるお相手の本音と、この恋が進む可能性を占星術と数秘術から詳しく読み解きます。
-◆ 相手があなたに見せていない本音
-◆ 二人の関係が動く今後1ヶ月の流れ
-◆ 今は連絡するべきか、待つべきか
-◆ この恋を進めるために必要な行動
+        "description": """恋愛・仕事・お金・人間関係など、今気になっている二つのお悩みを、占星術と数秘術から詳しく読み解きます。
+◆ 今あなたに起きている流れと、その意味
+◆ これから1ヶ月の流れ
+◆ 今は動くべきか、待つべきか
+◆ 状況を良くするために必要な行動
 ご質問2つに、約2,500文字で丁寧にお答えします。
-相手の気持ちと次の一歩を、まとめて確かめたい方のための鑑定です。""",
+お名前入りの護符をお付けします。
+二つのお悩みと次の一歩を、まとめて確かめたい方のための鑑定です。""",
     },
     "premium": {
         "label": "プレミアム鑑定", "checkout_name": "【プレミアム】占星術×数秘術鑑定",
-        "amount": 3000, "questions": 3, "characters": "約3,500文字",
-        "description": """気になるお相手の本音、この恋が進む可能性、そして今あなたが動くべき時期を、占星術と数秘術から深く読み解きます。
-◆ 相手が表に出していない本音
-◆ 二人の関係が動く今後3ヶ月の流れ
-◆ 復縁・複雑な恋に隠れている問題
-◆ 連絡するべき時期、待つべき時期
-◆ この恋を進めるための具体的な行動
-ご質問3つに、約3,500文字で詳しくお答えします。
-「このまま待っていていいのか」「今、何をすればいいのか」を曖昧なままにせず、次の一歩を具体的に知りたい方のための鑑定です。""",
+        "amount": 6000, "questions": 3, "characters": "約3,500文字",
+        # 2026-11-18に3,000円から上げた。上げる前に開いた支払い画面で払った人も通す。
+        "accepted_amounts": [6000, 3000],
+        "description": """恋愛・仕事・お金・人間関係など、今気になっている三つのお悩みと、これからの流れを、占星術と数秘術から深く読み解きます。
+◆ 今あなたに起きている流れと、その意味
+◆ 6ヶ月先までの運勢の流れ
+◆ 動くといい時期、慎重にしたい時期
+◆ 状況を良くするための具体的な行動
+ご質問3つに、詳しくお答えします。
+6ヶ月の運気カレンダーと、お名前入りの護符をお付けします。
+これからの流れまで、しっかり知っておきたい方のための鑑定です。""",
     },
 }
 
@@ -225,7 +228,7 @@ def retrieve_paid_session(session_id):
     course = (session.get("metadata") or {}).get("course")
     if course not in PLANS:
         raise ValueError("購入コースを確認できません")
-    if session.get("amount_total") != PLANS[course]["amount"]:
+    if session.get("amount_total") not in PLANS[course].get("accepted_amounts", [PLANS[course]["amount"]]):
         raise ValueError("決済金額がコース料金と一致しません")
     return session
 
@@ -457,7 +460,7 @@ def recent_same_course_orders(orders, course_label, exclude_session_id="", now=N
     return found
 
 
-STEP_SHEET_HEADERS = ["LINE識別番号", "現在の段階", "更新日時"]
+STEP_SHEET_HEADERS = ["LINE識別番号", "現在の段階", "更新日時", "生年月日", "星座", "数秘", "テーマ", "見送りの理由", "見送った日時"]
 
 
 class StepProgressStore:
@@ -487,7 +490,8 @@ class StepProgressStore:
                 cols=len(STEP_SHEET_HEADERS),
             )
         current = self.worksheet.row_values(1)
-        if not current:
+        if current[:len(STEP_SHEET_HEADERS)] != STEP_SHEET_HEADERS:
+            # 見出しが足りなければ書き足す（左の3列は今までと同じ）
             self.worksheet.update([STEP_SHEET_HEADERS], "A1")
 
     def _find_row(self, line_user_id):
@@ -523,6 +527,45 @@ class StepProgressStore:
             if row:
                 self.worksheet.update([[line_user_id, 0, now_iso()]], f"A{row}:C{row}")
 
+    def get_profile(self, line_user_id):
+        """生年月日・星座・数秘・テーマ・見送りの理由を返す。なければ空の辞書。"""
+        row = self._find_row(line_user_id)
+        if not row:
+            return {}
+        values = self.worksheet.row_values(row) + [""] * len(STEP_SHEET_HEADERS)
+        return dict(zip(STEP_SHEET_HEADERS, values[:len(STEP_SHEET_HEADERS)]))
+
+    def _write(self, line_user_id, column_values):
+        """指定の列だけ変えて、その人の行を1回でまとめて書く。行がなければ作る。"""
+        with self._lock:
+            row = self._find_row(line_user_id)
+            width = len(STEP_SHEET_HEADERS)
+            if row:
+                values = (self.worksheet.row_values(row) + [""] * width)[:width]
+            else:
+                values = [line_user_id, 0, now_iso()] + [""] * (width - 3)
+            for header, value in column_values.items():
+                values[STEP_SHEET_HEADERS.index(header)] = value
+            if row:
+                last = gspread.utils.rowcol_to_a1(row, width)
+                self.worksheet.update([values], f"A{row}:{last}")
+            else:
+                self.worksheet.append_row(values, value_input_option=gspread.utils.ValueInputOption.user_entered)
+
+    def save_start(self, line_user_id, birthdate, zodiac, number):
+        """生年月日（または星座だけ）を受け取ったとき。テーマと見送りは消して、最初から。"""
+        self._write(line_user_id, {
+            "現在の段階": 0, "更新日時": now_iso(),
+            "生年月日": birthdate, "星座": zodiac, "数秘": number,
+            "テーマ": "", "見送りの理由": "", "見送った日時": "",
+        })
+
+    def save_theme(self, line_user_id, theme):
+        self._write(line_user_id, {"テーマ": theme, "更新日時": now_iso()})
+
+    def save_decline(self, line_user_id, reason):
+        self._write(line_user_id, {"見送りの理由": reason, "見送った日時": now_iso()})
+
 
 def validate_intake(form, question_count):
     required = [
@@ -531,12 +574,6 @@ def validate_intake(form, question_count):
         "customer_birth_time",
         "customer_birth_place",
         "customer_zodiac",
-        "partner_name",
-        "partner_birth_date",
-        "partner_birth_time",
-        "partner_birth_place",
-        "partner_zodiac",
-        "relationship",
         "situation",
         "consent_accuracy",
         "consent_privacy",

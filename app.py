@@ -21,7 +21,9 @@ from linebot.v3.messaging import (
     URIAction,
     PushMessageRequest,
 )
-from linebot.v3.webhooks import MessageEvent, TextMessageContent
+from linebot.v3.webhooks import MessageEvent, PostbackEvent, TextMessageContent
+
+import funnel
 
 from commerce import (
     PLANS,
@@ -299,125 +301,8 @@ def build_fortune_message(zodiac, nickname, now=None):
     return base.replace(marker, daily_section + marker, 1)
 
 # どんな言い方のメッセージでも、行き止まりにしない。分からない言葉には、必ずこの返事とコースのボタンを出す。
-DEFAULT_MESSAGE = (
-    "メッセージありがとうございます🌙\n"
-    "星座占いは、星座の名前（例：牡羊座、やぎ座）を送ってくださいね。\n"
-    "鑑定をご希望のときは、下のボタンからコースをお選びくださいね🔮"
-)
-
-
-COURSE_MENU_TEXT = """気になるお相手の本音、
-この恋が進む可能性、
-そして今あなたが動くべき時期を、
-あなたとお相手の状況に合わせて
-星の動きと数秘術から読み解きます🔮
-
-💎 お試し鑑定　980円
-質問1つ／約1,500文字
-まず一つだけ答えを知りたい方へ
-
-💎 スタンダード鑑定　2,000円
-質問2つ／約2,500文字
-相手の本音と今後の流れを知りたい方へ
-
-💎 プレミアム鑑定　3,000円
-質問3つ／約3,500文字
-復縁・複雑な恋などを深く知りたい方へ
-
-迷われる方には、
-✨スタンダード鑑定がおすすめです✨
-
-「相手は私をどう思っている？」
-「この恋を進めるために、私は何をすればいい？」
-といった2つの悩みをまとめて確認できます。
-
-ボタンを押すと、お支払い画面が開きます💳
-お支払いのあとに、鑑定に必要な情報（生年月日など）を入力していただきます🌙
-
-ご希望のコースをお選びください✨"""
-
-CONTINUE_PROMPT = "\n\n興味がある方は「続き」と送ってくださいね🌙"
-
-STEP_MESSAGES = {
-    # 1通目（無料鑑定）の直後に「続き」と送った人へ
-    1: (
-        "{nickname}さん🌙\n\n"
-        "まず、私の自己紹介をしますね。\n\n"
-        "占星術×数秘術で\n"
-        "恋愛のご相談を鑑定しているライザです🔮\n\n"
-        "この3ヶ月で、146人の方に\n"
-        "運勢をお届けしてきました。\n\n"
-        "「あの人は今、私のことどう思ってる？」\n"
-        "「自分から連絡していいの？ それとも待った方がいいの？」\n"
-        "「このまま待ったら、彼は戻ってくる？」\n"
-        "「好きって言ってくれないのは、なんでなの？」\n\n"
-        "そんな声を日々たくさんいただいていて、\n"
-        "これまで星座別の動画を70本以上お届けしてきました。\n\n"
-        "次は、鑑定でどこまで深く読み解けるのか、\n"
-        "もう少し詳しくお話ししますね🌸"
-        + CONTINUE_PROMPT
-    ),
-}
-
-# 2回目の「続き」では、①鑑定の中身 ②鑑定書の画像 ③コースの説明とボタン を続けて送る。
-STEP2_READING_TEXT = (
-    "{nickname}さん🌙\n\n"
-    "ここからは、鑑定でどこまで読み解けるのかをお話ししますね。\n\n"
-    "さきほどの4つのお悩みに、鑑定ではこうお答えします🔮\n\n"
-    "「あの人は今、私のことどう思ってる？」\n"
-    "→ お二人の星の配置と生年月日から、お相手の本音を読み解いていきます。\n\n"
-    "「自分から連絡していいの？ それとも待った方がいいの？」\n"
-    "→ 動いていい時期と、待ったほうがいい時期をお伝えします。\n\n"
-    "「このまま待ったら、彼は戻ってくる？」\n"
-    "→ この恋がこれからどう動いていくのかを、丁寧に視てまいります。\n\n"
-    "「好きって言ってくれないのは、なんでなの？」\n"
-    "→ お相手が気持ちを言葉にしない理由を、星の配置と生年月日から紐解いていきます。\n\n"
-    "星座の運勢は、同じ星座の方みんなに共通のお話でしたよね。\n"
-    "鑑定では、あなたとお相手、お二人の生年月日をもとに、あなたのためだけにお答えしますよ✨\n\n"
-    "実際の鑑定書は、こんな形でお届けしています👇"
-)
-
-STEP2_COURSE_TEXT = """ご用意しているコースは、3つありますよ🌸
-
-💎 お試し鑑定　980円
-質問1つ／約1,500文字／A4で6枚
-まず一つだけ答えを知りたい方へ
-
-💎 スタンダード鑑定　2,000円
-質問2つ／約2,500文字／A4で8枚
-相手の本音と今後の流れを知りたい方へ
-
-💎 プレミアム鑑定　3,000円
-質問3つ／約3,500文字／A4で9枚
-復縁・複雑な恋などを深く知りたい方へ
-
-迷われる方には、スタンダード鑑定をおすすめしています✨
-「相手は私をどう思っている？」
-「この恋を進めるために、私は何をすればいい？」
-といった2つのお悩みを、まとめて確かめられますよ。
-
-下のボタンを押すと、お支払い画面が開きます💳
-お支払いのあとに、鑑定に必要な情報（生年月日など）をご入力いただけます🌙
-
-ご希望のコースを、下から選んでくださいね✨"""
-
 SAMPLE_IMAGE_PATH = "/static/kanteisho-sample.jpg"
 SAMPLE_PREVIEW_PATH = "/static/kanteisho-sample-preview.jpg"
-
-
-def step2_messages(line_user_id, nickname):
-    base_url = public_base_url()
-    return [
-        TextMessage(text=STEP2_READING_TEXT.format(nickname=nickname)),
-        ImageMessage(
-            original_content_url=base_url + SAMPLE_IMAGE_PATH,
-            preview_image_url=base_url + SAMPLE_PREVIEW_PATH,
-        ),
-        TextMessage(
-            text=STEP2_COURSE_TEXT,
-            quick_reply=course_quick_reply(line_user_id, nickname),
-        ),
-    ]
 
 
 def normalized_text(text):
@@ -469,22 +354,65 @@ def public_base_url():
     return value
 
 
-def course_quick_reply(line_user_id, display_name, only_course=None):
+COURSE_LABELS = {
+    "trial": "お試し 980円",
+    "standard": "スタンダード 2,000円",
+    "premium": "プレミアム 6,000円",
+}
+
+
+def course_quick_reply(line_user_id, display_name, only_course=None, with_decline=False, with_birthdate=False):
     token = create_checkout_token(line_user_id, display_name)
     courses = [only_course] if only_course else ["trial", "standard", "premium"]
-    labels = {
-        "trial": "お試し 980円",
-        "standard": "スタンダード 2,000円",
-        "premium": "プレミアム 3,000円",
-    }
     base_url = public_base_url()
-    return QuickReply(items=[
+    items = [QuickReplyItem(action=funnel.birthdate_action())] if with_birthdate else []
+    items += [
         QuickReplyItem(action=URIAction(
-            label=labels[course],
+            label=COURSE_LABELS[course],
             uri=f"{base_url}/checkout/start/{course}?token={token}",
         ))
         for course in courses
-    ])
+    ]
+    if with_decline:
+        items.append(funnel.decline_item())
+    return QuickReply(items=items)
+
+
+def love_tendency(zodiac):
+    """今までの恋愛の文から、星座の恋愛傾向の段だけを取り出す（見出しと「ここまでは…」より後は使わない）。"""
+    body = FORTUNES[zodiac].split("\n", 3)[3]
+    return body.split("\n\nここまでは、")[0].strip()
+
+
+def course_messages(line_user_id, nickname, profile):
+    """「続き」のあと：自己紹介・お答えできること・鑑定書の見本・コースを1回で出す。"""
+    theme = profile.get("テーマ") or "恋愛"
+    zodiac = profile.get("星座") or None
+    base_url = public_base_url()
+    return [
+        TextMessage(text=funnel.intro_text(nickname, zodiac)),
+        TextMessage(text=funnel.theme_answers_text(theme)),
+        ImageMessage(
+            original_content_url=base_url + SAMPLE_IMAGE_PATH,
+            preview_image_url=base_url + SAMPLE_PREVIEW_PATH,
+        ),
+        TextMessage(
+            text=funnel.COURSE_TEXT,
+            quick_reply=course_quick_reply(line_user_id, nickname, with_decline=True),
+        ),
+    ]
+
+
+def read_profile(line_user_id):
+    try:
+        return StepProgressStore().get_profile(line_user_id)
+    except Exception:
+        app.logger.exception("step profile read failed")
+        return {}
+
+
+def start_message(nickname):
+    return TextMessage(text=funnel.start_message_text(nickname), quick_reply=funnel.start_quick_reply())
 
 
 def form_serializer():
@@ -1045,6 +973,8 @@ def process_line_events(events):
                 continue
             if isinstance(event, MessageEvent) and isinstance(event.message, TextMessageContent):
                 handle_message(event)
+            elif isinstance(event, PostbackEvent):
+                handle_postback(event)
         except Exception:
             app.logger.exception("line event processing failed")
 
@@ -1081,8 +1011,10 @@ def wants_course_menu(text):
     return len(text) <= 40 and is_paid_consultation_request(text)
 
 
-def forward_to_admin(nickname, line_user_id, text, orders=None):
-    if orders:
+def forward_to_admin(nickname, line_user_id, text, orders=None, head=None):
+    if head:
+        pass
+    elif orders:
         courses = "・".join(sorted({o.get("コース", "") for o in orders}))
         head = f"💬 お支払い済みの{nickname}さん（{courses}）からLINEが届きました。"
     else:
@@ -1135,7 +1067,9 @@ def _handle_message(event):
             break
     if not matched_zodiac:
         for alias, zodiac in ZODIAC_ALIASES.items():
-            if alias in text:
+            # 「いて」「うお」などの短い呼び方は、文の中の言葉（悩んでいて 等）と取りちがえるので、
+            # その言葉だけが送られてきたときに限る。「〜座」が付いている呼び方は文の中でも拾う。
+            if (alias in text) if alias.endswith("座") else (normalized_text(text) == alias):
                 matched_zodiac = zodiac
                 break
 
@@ -1161,8 +1095,8 @@ def _handle_message(event):
             forward_to_admin(nickname, line_user_id, text)
             reply = TextMessage(text=RECEIPT_MESSAGE.format(nickname=nickname))
 
-        elif is_free_reading_request(text):
-            reply = TextMessage(text=free_reading_message())
+        elif "無料診断" in normalized_text(text) or is_free_reading_request(text):
+            reply = start_message(nickname)
 
         elif text == "お試し鑑定希望":
             reply = TextMessage(
@@ -1183,39 +1117,42 @@ def _handle_message(event):
             )
 
         elif matched_zodiac:
-            # 無料鑑定に有料メニューを即同梱しない（無料→信頼構築→提案の順にするため）。
-            # 続きは「続き」キーワードで本人のペースで進めてもらう（応答メッセージのみなので無料）。
-            # 星座を送り直した人は、続きを自己紹介から始め直す。
+            # 星座を打ってきた人（生年月日は分からない）。テーマを選んでもらう。記録に失敗しても返事は出す。
             try:
-                StepProgressStore().reset_stage(line_user_id)
+                StepProgressStore().save_start(line_user_id, "", matched_zodiac, "")
             except Exception:
-                app.logger.exception("step progress reset failed")
-            reply = TextMessage(text=build_fortune_message(matched_zodiac, nickname) + CONTINUE_PROMPT)
+                app.logger.exception("step progress save failed")
+            reply = TextMessage(
+                text=funnel.theme_question_text(nickname, matched_zodiac),
+                quick_reply=funnel.theme_quick_reply(),
+            )
 
         elif normalized_text(text) == "続き":
-            stage = StepProgressStore().advance_stage(line_user_id)
-            if stage in STEP_MESSAGES:
-                reply = TextMessage(text=STEP_MESSAGES[stage].format(nickname=nickname))
-            elif stage == 2:
-                # 鑑定の中身・鑑定書の画像・コースの説明とボタンを続けて送る。
-                reply = step2_messages(line_user_id, nickname)
-            else:
-                # 3回目以降は3コースの案内（スタンダードがおすすめ）と3つのボタン。
-                reply = TextMessage(
-                    text="鑑定希望ありがとうございます🌙\n\n" + COURSE_MENU_TEXT,
-                    quick_reply=course_quick_reply(line_user_id, nickname),
-                )
+            # 自己紹介・お答えできること・鑑定書・コースを1回で出す。記録に失敗しても返事は出す。
+            try:
+                StepProgressStore().advance_stage(line_user_id)
+            except Exception:
+                app.logger.exception("step progress advance failed")
+            reply = course_messages(line_user_id, nickname, read_profile(line_user_id))
 
         elif is_paid_consultation_request(text):
             reply = TextMessage(
-                text="鑑定希望ありがとうございます🌙\n\n" + COURSE_MENU_TEXT,
-                quick_reply=course_quick_reply(line_user_id, nickname),
+                text="鑑定希望ありがとうございます🌙\n\n" + funnel.COURSE_TEXT,
+                quick_reply=course_quick_reply(line_user_id, nickname, with_decline=True),
             )
+
+        elif read_profile(line_user_id).get("見送りの理由"):
+            # 「今回はやめておきます」を押したあとに、自分から文章を送ってきた人。中身はオーナーへ回す。
+            forward_to_admin(
+                nickname, line_user_id, text,
+                head=f"💬 「今回はやめておきます」を押した{nickname}さんからLINEが届きました。「3日以内にお返事します」と返しています。",
+            )
+            reply = TextMessage(text=funnel.AFTER_REASON_RECEIPT.format(nickname=nickname))
 
         else:
             reply = TextMessage(
-                text=DEFAULT_MESSAGE,
-                quick_reply=course_quick_reply(line_user_id, nickname),
+                text=funnel.DEFAULT_TEXT,
+                quick_reply=course_quick_reply(line_user_id, nickname, with_birthdate=True),
             )
 
         messages = reply if isinstance(reply, list) else [reply]
@@ -1232,6 +1169,99 @@ def _handle_message(event):
             line_bot_api.reply_message(
                 ReplyMessageRequest(reply_token=event.reply_token, messages=text_only)
             )
+
+
+@handler.add(PostbackEvent)
+def handle_postback(event):
+    try:
+        _handle_postback(event)
+    except Exception as exc:
+        app.logger.exception("handle_postback failed")
+        user_id = getattr(event.source, "user_id", "")
+        notify_admin_alert(
+            "⚠️ LINEのボタンの返事の途中でエラーが起きました。\n\n"
+            f"LINE識別番号：{user_id}\n"
+            f"押されたボタン：{getattr(event.postback, 'data', '')[:200]}\n"
+            f"エラー：{type(exc).__name__}: {exc}"
+        )
+        try:
+            with ApiClient(configuration) as api_client:
+                MessagingApi(api_client).reply_message(ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[TextMessage(text=ERROR_FALLBACK_MESSAGE)],
+                ))
+        except Exception:
+            app.logger.exception("postback error fallback reply failed")
+
+
+def _handle_postback(event):
+    data = funnel.parse_postback(event.postback.data)
+    action = data.get("action", "")
+    line_user_id = event.source.user_id
+    with ApiClient(configuration) as api_client:
+        line_bot_api = MessagingApi(api_client)
+        try:
+            nickname = line_bot_api.get_profile(user_id=line_user_id).display_name
+        except Exception:
+            nickname = "あなた"
+
+        if action == "birthdate":
+            params = event.postback.params or {}
+            birthdate = funnel.parse_birthdate(params.get("date"))
+            if not birthdate:
+                reply = start_message(nickname)
+            else:
+                zodiac = funnel.zodiac_from_date(birthdate)
+                number = funnel.life_path_number(birthdate)
+                try:
+                    StepProgressStore().save_start(line_user_id, birthdate.isoformat(), zodiac, number)
+                except Exception:
+                    app.logger.exception("step progress save failed")
+                reply = TextMessage(
+                    text=funnel.theme_question_text(nickname, zodiac, birthdate),
+                    quick_reply=funnel.theme_quick_reply(),
+                )
+
+        elif action == "theme" and data.get("t") in funnel.THEMES:
+            theme = data["t"]
+            profile = read_profile(line_user_id)
+            zodiac = profile.get("星座")
+            if zodiac not in FORTUNES:
+                # 記録が読めない・まだ生年月日をもらっていない人は、最初から。
+                reply = start_message(nickname)
+            else:
+                try:
+                    StepProgressStore().save_theme(line_user_id, theme)
+                except Exception:
+                    app.logger.exception("step theme save failed")
+                number = str(profile.get("数秘") or "").strip()
+                reply = TextMessage(
+                    text=funnel.free_reading_text(
+                        nickname, zodiac, theme, number or None,
+                        love_tendency=love_tendency(zodiac), love_daily=DAILY_LOVE_THEMES,
+                    ),
+                    quick_reply=funnel.continue_quick_reply(),
+                )
+
+        elif action == "decline":
+            try:
+                StepProgressStore().save_decline(line_user_id, "（理由は未選択）")
+            except Exception:
+                app.logger.exception("step decline save failed")
+            reply = TextMessage(text=funnel.DECLINE_QUESTION_TEXT, quick_reply=funnel.reason_quick_reply())
+
+        elif action == "reason" and data.get("r") in funnel.REASON_REPLIES:
+            reason = data["r"]
+            try:
+                StepProgressStore().save_decline(line_user_id, reason)
+            except Exception:
+                app.logger.exception("step reason save failed")
+            reply = TextMessage(text=funnel.REASON_REPLIES[reason])
+
+        else:
+            reply = start_message(nickname)
+
+        line_bot_api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[reply]))
 
 
 if __name__ == "__main__":

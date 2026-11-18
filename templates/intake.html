@@ -43,20 +43,20 @@
       </fieldset>
 
       <fieldset>
-        <legend><span>02</span> お相手について</legend>
-        <p class="hint">分からない項目は「不明」と入力してください。</p>
+        <legend><span>02</span> お相手について（お相手のいるご相談の方だけ）</legend>
+        <p class="hint">恋愛や、特定の方との関係のご相談の方だけ、ご入力ください。それ以外のご相談の方は、空いたままで大丈夫です。分からない項目は「不明」と入力してください。</p>
         <div class="field-grid">
-          <label>お相手のお名前<input name="partner_name" value="{{ values.get('partner_name', '') }}" required></label>
-          <label>お相手の生年月日<input name="partner_birth_date" value="{{ values.get('partner_birth_date', '') }}" placeholder="例：1991/02/02／不明" required></label>
-          <label>お相手の出生時間<input name="partner_birth_time" value="{{ values.get('partner_birth_time', '') }}" placeholder="例：18:00／不明" required></label>
-          <label>お相手の出生地<input name="partner_birth_place" value="{{ values.get('partner_birth_place', '') }}" placeholder="例：兵庫県神戸市／不明" required></label>
-          <label>お相手の星座<select name="partner_zodiac" required><option value="">選択してください</option><option value="不明" {% if values.get('partner_zodiac') == '不明' %}selected{% endif %}>不明</option>{% for zodiac in zodiacs %}<option value="{{ zodiac }}" {% if values.get('partner_zodiac') == zodiac %}selected{% endif %}>{{ zodiac }}</option>{% endfor %}</select></label>
+          <label>お相手のお名前<input name="partner_name" value="{{ values.get('partner_name', '') }}"></label>
+          <label>お相手の生年月日<input name="partner_birth_date" value="{{ values.get('partner_birth_date', '') }}" placeholder="例：1991/02/02／不明"></label>
+          <label>お相手の出生時間<input name="partner_birth_time" value="{{ values.get('partner_birth_time', '') }}" placeholder="例：18:00／不明"></label>
+          <label>お相手の出生地<input name="partner_birth_place" value="{{ values.get('partner_birth_place', '') }}" placeholder="例：兵庫県神戸市／不明"></label>
+          <label>お相手の星座<select name="partner_zodiac"><option value="">選択してください</option><option value="不明" {% if values.get('partner_zodiac') == '不明' %}selected{% endif %}>不明</option>{% for zodiac in zodiacs %}<option value="{{ zodiac }}" {% if values.get('partner_zodiac') == zodiac %}selected{% endif %}>{{ zodiac }}</option>{% endfor %}</select></label>
         </div>
       </fieldset>
 
       <fieldset>
         <legend><span>03</span> 現在の状況</legend>
-        <label>現在の関係<input name="relationship" value="{{ values.get('relationship', '') }}" placeholder="例：片思い、交際中、復縁希望" required></label>
+        <label>お相手との関係（お相手のいるご相談の方だけ）<input name="relationship" value="{{ values.get('relationship', '') }}" placeholder="例：片思い、交際中、復縁希望、上司、家族"></label>
         <label>現在どのような状況ですか<textarea name="situation" rows="6" required>{{ values.get('situation', '') }}</textarea></label>
       </fieldset>
 
