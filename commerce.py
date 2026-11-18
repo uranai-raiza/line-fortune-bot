@@ -120,7 +120,8 @@ def _fernet():
     return Fernet(key)
 
 
-CHECKOUT_TOKEN_TTL = 60 * 60 * 24
+# トークの中に残るコースのボタンから、あとで押しても開けるように30日（2026-11-18に1日から延ばした）
+CHECKOUT_TOKEN_TTL = 60 * 60 * 24 * 30
 
 
 class CheckoutTokenError(ValueError):

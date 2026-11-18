@@ -225,6 +225,13 @@ COURSE_TEXT = """ご用意しているコースは、3つありますよ🌸
 ご希望のコースを、下から選んでくださいね✨"""
 
 
+COURSE_BUTTONS_TEXT = "ご希望のコースを、下のボタンから選んでくださいね✨"
+
+
+def decline_action():
+    return PostbackAction(label=DECLINE_LABEL, data="action=decline", display_text=DECLINE_LABEL)
+
+
 def decline_item():
     return QuickReplyItem(action=PostbackAction(label=DECLINE_LABEL, data="action=decline", display_text=DECLINE_LABEL))
 

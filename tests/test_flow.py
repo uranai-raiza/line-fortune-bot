@@ -71,7 +71,7 @@ class FlowTests(unittest.TestCase):
                 with self.assertRaises(CheckoutTokenError) as ctx:
                     read_checkout_token(value)
                 self.assertEqual(ctx.exception.reason, reason)
-        later = datetime.now(timezone.utc) + timedelta(days=2)
+        later = datetime.now(timezone.utc) + timedelta(days=31)
         with patch("commerce.time.time", return_value=later.timestamp()):
             with self.assertRaises(CheckoutTokenError) as ctx:
                 read_checkout_token(token)
@@ -178,16 +178,18 @@ class FlowTests(unittest.TestCase):
         self.assertEqual([i.action.label for i in first.quick_reply.items], app.funnel.THEMES)
         profiles["U123"]["テーマ"] = "仕事"
         step = send("続き")
-        self.assertEqual(len(step), 4)
+        self.assertEqual(len(step), 5)
         self.assertIn("この3ヶ月で146人の方に", step[0].text)
         self.assertIn("今の仕事を、このまま続けていいの？", step[1].text)
         self.assertEqual(step[2].original_content_url, "https://example.test/static/kanteisho-sample.jpg")
         self.assertEqual(step[2].preview_image_url, "https://example.test/static/kanteisho-sample-preview.jpg")
         self.assertIn("プレミアム鑑定　6,000円", step[3].text)
+        self.assertIsNone(step[3].quick_reply)
         self.assertEqual(
-            [item.action.label for item in step[3].quick_reply.items],
+            [action.label for action in step[4].template.actions],
             ["お試し 980円", "スタンダード 2,000円", "プレミアム 6,000円", "今回はやめておきます"],
         )
+        self.assertLessEqual(len(step[4].template.text), 160)
 
     def test_premium_price_is_consistent(self):
         self.assertEqual(PLANS["premium"]["amount"], 6000)
@@ -290,11 +292,11 @@ class FlowTests(unittest.TestCase):
                 app.handle_message(event)
         calls = api.return_value.reply_message.call_args_list
         self.assertEqual(len(calls), 2)
-        self.assertEqual(len(calls[0].args[0].messages), 4)
+        self.assertEqual(len(calls[0].args[0].messages), 5)
         retried = calls[1].args[0].messages
-        self.assertEqual(len(retried), 3)
+        self.assertEqual(len(retried), 4)
         self.assertFalse(any(isinstance(m, app.ImageMessage) for m in retried))
-        self.assertIsNotNone(retried[-1].quick_reply)
+        self.assertEqual(len(retried[-1].template.actions), 4)
 
     def test_step2_texts_fit_line_limits(self):
         for theme in app.funnel.THEMES:

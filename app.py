@@ -18,6 +18,8 @@ from linebot.v3.messaging import (
     ImageMessage,
     QuickReply,
     QuickReplyItem,
+    TemplateMessage,
+    ButtonsTemplate,
     URIAction,
     PushMessageRequest,
 )
@@ -378,6 +380,23 @@ def course_quick_reply(line_user_id, display_name, only_course=None, with_declin
     return QuickReply(items=items)
 
 
+def course_buttons(line_user_id, display_name, with_decline=False, with_birthdate=False):
+    """コースのボタンを、トークの中に縦に並べて出す（文字を大きくしているスマホでも全部見える。押すまで消えない）。"""
+    token = create_checkout_token(line_user_id, display_name)
+    base_url = public_base_url()
+    actions = [funnel.birthdate_action()] if with_birthdate else []
+    actions += [
+        URIAction(label=COURSE_LABELS[course], uri=f"{base_url}/checkout/start/{course}?token={token}")
+        for course in ("trial", "standard", "premium")
+    ]
+    if with_decline:
+        actions.append(funnel.decline_action())
+    return TemplateMessage(
+        alt_text="コースのご案内（お試し980円・スタンダード2,000円・プレミアム6,000円）",
+        template=ButtonsTemplate(text=funnel.COURSE_BUTTONS_TEXT, actions=actions[:4]),
+    )
+
+
 def love_tendency(zodiac):
     """今までの恋愛の文から、星座の恋愛傾向の段だけを取り出す（見出しと「ここまでは…」より後は使わない）。"""
     body = FORTUNES[zodiac].split("\n", 3)[3]
@@ -396,10 +415,8 @@ def course_messages(line_user_id, nickname, profile):
             original_content_url=base_url + SAMPLE_IMAGE_PATH,
             preview_image_url=base_url + SAMPLE_PREVIEW_PATH,
         ),
-        TextMessage(
-            text=funnel.COURSE_TEXT,
-            quick_reply=course_quick_reply(line_user_id, nickname, with_decline=True),
-        ),
+        TextMessage(text=funnel.COURSE_TEXT),
+        course_buttons(line_user_id, nickname, with_decline=True),
     ]
 
 
@@ -606,7 +623,7 @@ def checkout_error_page(reason_text, reason_code):
     return render_template(
         "intake_complete.html",
         title="決済画面を開けませんでした",
-        message=f"{reason_text}。LINEへ戻り、もう一度コースを選んでください。（確認コード：{reason_code}）",
+        message=f"{reason_text}。お手数ですが、LINEへ戻り、トークで「鑑定希望」と送ってください。新しいボタンをお送りします。（確認コード：{reason_code}）",
         session_id="未発行",
     )
 
@@ -1138,10 +1155,10 @@ def _handle_message(event):
             reply = course_messages(line_user_id, nickname, read_profile(line_user_id))
 
         elif is_paid_consultation_request(text):
-            reply = TextMessage(
-                text="鑑定希望ありがとうございます🌙\n\n" + funnel.COURSE_TEXT,
-                quick_reply=course_quick_reply(line_user_id, nickname, with_decline=True),
-            )
+            reply = [
+                TextMessage(text="鑑定希望ありがとうございます🌙\n\n" + funnel.COURSE_TEXT),
+                course_buttons(line_user_id, nickname, with_decline=True),
+            ]
 
         elif read_profile(line_user_id).get("見送りの理由"):
             # 「今回はやめておきます」を押したあとに、自分から文章を送ってきた人。中身はオーナーへ回す。
@@ -1152,10 +1169,10 @@ def _handle_message(event):
             reply = TextMessage(text=funnel.AFTER_REASON_RECEIPT.format(nickname=nickname))
 
         else:
-            reply = TextMessage(
-                text=funnel.DEFAULT_TEXT,
-                quick_reply=course_quick_reply(line_user_id, nickname, with_birthdate=True),
-            )
+            reply = [
+                TextMessage(text=funnel.DEFAULT_TEXT),
+                course_buttons(line_user_id, nickname, with_birthdate=True),
+            ]
 
         messages = reply if isinstance(reply, list) else [reply]
         try:

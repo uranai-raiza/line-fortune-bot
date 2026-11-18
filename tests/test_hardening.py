@@ -83,8 +83,8 @@ class LineReplyTests(unittest.TestCase):
             with self.subTest(text=text):
                 replies, pushes, _ = self.send(text)
                 self.assertEqual(len(replies), 1)
-                message = replies[0][0]
-                labels = [i.action.label for i in message.quick_reply.items]
+                buttons = replies[0][-1]
+                labels = [a.label for a in buttons.template.actions]
                 for course in ("お試し 980円", "スタンダード 2,000円", "プレミアム 6,000円"):
                     self.assertIn(course, labels)
                 self.assertEqual(pushes, [])  # 無料の返事だけ。ボットから自分で送る通数は使わない
@@ -116,7 +116,7 @@ class LineReplyTests(unittest.TestCase):
         event.source.user_id = "U123"
         event.reply_token = "reply-token"
         with patch("app.StepProgressStore", step_store), patch("app.MessagingApi") as api, \
-                patch("app.SheetsStore", side_effect=RuntimeError("no sheet")),                 patch("app.course_quick_reply", side_effect=RuntimeError("button broken")):
+                patch("app.SheetsStore", side_effect=RuntimeError("no sheet")),                 patch("app.course_buttons", side_effect=RuntimeError("button broken")):
             api.return_value.get_profile.return_value.display_name = "まき"
             app.handle_message(event)
         reply = api.return_value.reply_message.call_args.args[0].messages[0].text
