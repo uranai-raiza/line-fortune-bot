@@ -21,7 +21,7 @@ from linebot.v3.messaging import (
     URIAction,
     PushMessageRequest,
 )
-from linebot.v3.webhooks import MessageEvent, PostbackEvent, TextMessageContent
+from linebot.v3.webhooks import FollowEvent, MessageEvent, PostbackEvent, TextMessageContent
 
 import funnel
 
@@ -975,6 +975,8 @@ def process_line_events(events):
                 handle_message(event)
             elif isinstance(event, PostbackEvent):
                 handle_postback(event)
+            elif isinstance(event, FollowEvent):
+                handle_follow(event)
         except Exception:
             app.logger.exception("line event processing failed")
 
@@ -1169,6 +1171,29 @@ def _handle_message(event):
             line_bot_api.reply_message(
                 ReplyMessageRequest(reply_token=event.reply_token, messages=text_only)
             )
+
+
+@handler.add(FollowEvent)
+def handle_follow(event):
+    """友だち追加（ブロック解除も）のとき。管理画面のあいさつのすぐあとに、生年月日を選ぶボタンを出す（返事なので無料）。"""
+    try:
+        with ApiClient(configuration) as api_client:
+            line_bot_api = MessagingApi(api_client)
+            try:
+                nickname = line_bot_api.get_profile(user_id=event.source.user_id).display_name
+            except Exception:
+                nickname = "あなた"
+            line_bot_api.reply_message(ReplyMessageRequest(
+                reply_token=event.reply_token,
+                messages=[TextMessage(
+                    text=funnel.follow_message_text(nickname),
+                    quick_reply=funnel.start_quick_reply(),
+                )],
+            ))
+    except Exception:
+        # 管理画面のあいさつは別に必ず届き、「無料診断」と送れば始められるので、ここでは知らせるだけ。
+        app.logger.exception("handle_follow failed")
+        notify_admin_alert(f"⚠️ 友だち追加のときの、生年月日のボタンを送れませんでした。\nLINE識別番号：{getattr(event.source, 'user_id', '')}")
 
 
 @handler.add(PostbackEvent)

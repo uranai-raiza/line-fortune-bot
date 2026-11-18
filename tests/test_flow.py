@@ -458,6 +458,33 @@ class NewFunnelTests(unittest.TestCase):
         }
         self.assertIsNone(validate_intake(form, 2))
 
+    def test_follow_event_sends_birthdate_button(self):
+        event = unittest.mock.MagicMock()
+        event.source.user_id = "U123"
+        event.reply_token = "reply-token"
+        with patch("app.MessagingApi") as api:
+            api.return_value.get_profile.return_value.display_name = "パパ"
+            app.handle_follow(event)
+        message = api.return_value.reply_message.call_args.args[0].messages[0]
+        self.assertIn("パパさん", message.text)
+        self.assertIn("生年月日を選ぶ", message.text)
+        self.assertEqual(message.quick_reply.items[0].action.type, "datetimepicker")
+
+    def test_follow_event_failure_alerts_owner_without_crashing(self):
+        event = unittest.mock.MagicMock()
+        event.source.user_id = "U123"
+        with patch("app.MessagingApi") as api, patch("app.notify_admin_alert") as alert:
+            api.return_value.reply_message.side_effect = RuntimeError("line down")
+            with self.assertLogs(app.app.logger, level="ERROR"):
+                app.handle_follow(event)
+        alert.assert_called_once()
+
+    def test_follow_event_is_dispatched(self):
+        event = app.FollowEvent.__new__(app.FollowEvent)
+        with patch("app.first_time_line_event", return_value=True), patch("app.handle_follow") as follow:
+            app.process_line_events([event])
+        follow.assert_called_once_with(event)
+
 
 if __name__ == "__main__":
     unittest.main()

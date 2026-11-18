@@ -85,6 +85,16 @@ def start_quick_reply():
     return QuickReply(items=[QuickReplyItem(action=birthdate_action())])
 
 
+def follow_message_text(nickname):
+    """友だち追加のとき、管理画面のあいさつのすぐあとに届く文（あいさつと重ならないよう短く）。"""
+    return (
+        f"{nickname}さん🌙\n"
+        "さっそく、あなたの今の運勢を無料で診断いたしますね。\n"
+        "下の「生年月日を選ぶ」を押して、生まれた日を選んでくださいね🔮\n"
+        "（星座の名前を送っていただいても大丈夫ですよ）"
+    )
+
+
 def theme_question_text(nickname, zodiac, birthdate=None):
     if birthdate:
         head = (
