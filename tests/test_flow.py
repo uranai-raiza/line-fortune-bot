@@ -148,7 +148,9 @@ class FlowTests(unittest.TestCase):
     def test_payment_notice_is_shown_before_course_buttons(self):
         notice = "ボタンを押すと、お支払い画面が開きます"
         self.assertIn(notice, app.funnel.COURSE_TEXT)
-        self.assertLess(app.funnel.COURSE_TEXT.index(notice), app.funnel.COURSE_TEXT.index("ご希望のコースを、下から選んでくださいね"))
+        # 「ご希望のコースを…選んでくださいね」はボタンの枠の一番上に1回だけ（案内の文と2回続けない）
+        self.assertNotIn("ご希望のコースを", app.funnel.COURSE_TEXT)
+        self.assertIn("ご希望のコースを", app.funnel.COURSE_BUTTONS_TEXT)
 
     def test_continue_flow_restarts_on_zodiac_and_ends_with_course_menu(self):
         profiles = {"U123": {"星座": "魚座", "テーマ": "仕事"}}
