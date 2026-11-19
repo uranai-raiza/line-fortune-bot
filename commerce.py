@@ -65,7 +65,7 @@ PLANS = {
 ◆ 動くといい時期、慎重にしたい時期
 ◆ 状況を良くするための具体的な行動
 ご質問3つに、詳しくお答えします。
-1年の運気暦（カレンダー）と、お名前入りの護符をお付けします。
+1年の運気カレンダーと、お名前入りの護符をお付けします。
 これからの流れまで、しっかり知っておきたい方のための鑑定です。""",
     },
     "gofu": {
@@ -74,7 +74,7 @@ PLANS = {
         "description": "お名前を入れた、恋愛成就・金運・開運のいずれかの護符です。2〜5日でこのトークにお届けします。",
     },
     "calendar": {
-        "kind": "calendar", "label": "運気暦（1年のカレンダー）", "checkout_name": "運気暦（1年のカレンダー）",
+        "kind": "calendar", "label": "1年の運気カレンダー", "checkout_name": "1年の運気カレンダー",
         "amount": 1500, "questions": 0,
         "description": "生年月日から1年の運気を読み解いた、月ごとの運気、いい日と慎重な日、新月・満月と六曜が分かるカレンダーです。2〜5日でこのトークにお届けします。",
     },
@@ -419,7 +419,7 @@ class SheetsStore:
             if kind == "gofu":
                 consultation = f"護符の種類：{data.get('gofu_type', '').strip()}"
             elif kind == "calendar":
-                consultation = f"運気暦のテーマ：{data.get('calendar_theme', '').strip()}"
+                consultation = f"運気カレンダーのテーマ：{data.get('calendar_theme', '').strip()}"
             updates = {
                 "本人の名前": data["customer_name"].strip(),
                 "生年月日": data.get("customer_birth_date", "").strip(),

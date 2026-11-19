@@ -27,7 +27,7 @@
       {% elif plan.kind == 'gofu' %}
         <p>護符に入れるお名前と、護符の種類をご入力ください。</p>
       {% else %}
-        <p>運気暦を作成するため、必須項目をご入力ください。</p>
+        <p>運気カレンダーを作成するため、必須項目をご入力ください。</p>
         <p>生まれた時間と場所は、分からない場合は空欄または「不明」で大丈夫です。</p>
       {% endif %}
     </section>
@@ -48,7 +48,7 @@
         </fieldset>
       {% elif plan.kind == 'calendar' %}
         <fieldset>
-          <legend><span>01</span> 運気暦について</legend>
+          <legend><span>01</span> 運気カレンダーについて</legend>
           <div class="field-grid">
             <label>お名前（ニックネーム可）<input name="customer_name" value="{{ values.get('customer_name', '') }}" required autocomplete="name"></label>
             <label>生年月日<input type="date" name="customer_birth_date" value="{{ values.get('customer_birth_date', '') }}" required></label>

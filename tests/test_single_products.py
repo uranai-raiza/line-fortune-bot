@@ -64,12 +64,12 @@ class SingleProductLineTests(unittest.TestCase):
                                  ["お名前入りの護符 500円", "今回はやめておきます"])
 
     def test_calendar_words_show_exact_guide_and_vertical_buttons(self):
-        for word in ("カレンダー希望", "運気暦について", "こよみがほしい"):
+        for word in ("カレンダー希望", "運気カレンダーについて", "こよみがほしい"):
             with self.subTest(word=word):
                 messages, _ = self.send(word)
                 self.assertEqual(messages[0].text, app.PRODUCT_GUIDES["calendar"].format(name="ライザ"))
                 self.assertEqual([a.label for a in messages[1].template.actions],
-                                 ["運気暦 1,500円", "今回はやめておきます"])
+                                 ["運気カレンダー 1,500円", "今回はやめておきます"])
 
     def test_active_order_still_takes_priority_over_product_word(self):
         order = {"コース": "お試し鑑定"}
@@ -129,7 +129,7 @@ class SingleProductIntakeTests(unittest.TestCase):
             ("gofu", {"customer_name": "護符名", "gofu_type": "開運"}, "護符の種類：開運"),
             ("calendar", {"customer_name": "暦名", "customer_birth_date": "1990-01-01",
                           "customer_birth_time": "不明", "customer_birth_place": "大阪",
-                          "calendar_theme": "仕事"}, "運気暦のテーマ：仕事"),
+                          "calendar_theme": "仕事"}, "運気カレンダーのテーマ：仕事"),
         ):
             with self.subTest(course=course):
                 store = commerce.SheetsStore.__new__(commerce.SheetsStore)

@@ -311,13 +311,13 @@ SAMPLE_PREVIEW_PATH = "/static/kanteisho-sample-preview.jpg"
 SAMPLE_CAROUSEL = [
     ("/static/carousel-kanteisho.jpg", "鑑定書の見本"),
     ("/static/carousel-gofu.jpg", "お名前入りの護符"),
-    ("/static/carousel-koyomi.jpg", "運気暦の見本"),
+    ("/static/carousel-koyomi.jpg", "運気カレンダーの見本"),
 ]
 
 
 def sample_carousel(base_url):
     return TemplateMessage(
-        alt_text="鑑定書・護符・運気暦の見本",
+        alt_text="鑑定書・護符・運気カレンダーの見本",
         template=ImageCarouselTemplate(columns=[
             ImageCarouselColumn(image_url=base_url + path, action=URIAction(label=label, uri=base_url + path))
             for path, label in SAMPLE_CAROUSEL
@@ -388,12 +388,12 @@ COURSE_LABELS = {
 
 PRODUCT_GUIDES = {
     "gofu": "{name}さん🌙\nあなたのお名前を入れた、あなただけの護符をお作りしますね。\n恋愛成就・金運・開運の3つから選べますよ。\nスマホの待ち受けにも、印刷して財布に入れるカードにもお使いいただけます。\nお値段は500円です。下のボタンから、お申し込みくださいね🔮",
-    "calendar": "{name}さん🌙\nあなたの生年月日から、これからの1年の流れを読み解いた「運気暦」をお作りしますね。\n月ごとの運気、いい日と慎重な日、新月・満月と六曜まで、1年分のカレンダーにしてお届けします。\n恋愛・仕事・お金・家族・人間関係・これからの運勢から、テーマを1つ選べますよ。\nお値段は1,500円です。下のボタンから、お申し込みくださいね📅",
+    "calendar": "{name}さん🌙\nあなたの生年月日から、これからの1年の流れを読み解いた「運気カレンダー」をお作りしますね。\n月ごとの運気、いい日と慎重な日、新月・満月と六曜まで、1年分のカレンダーにしてお届けします。\n恋愛・仕事・お金・家族・人間関係・これからの運勢から、テーマを1つ選べますよ。\nお値段は1,500円です。下のボタンから、お申し込みくださいね📅",
 }
 
 PRODUCT_BUTTON_LABELS = {
     "gofu": "お名前入りの護符 500円",
-    "calendar": "運気暦 1,500円",
+    "calendar": "運気カレンダー 1,500円",
 }
 
 
