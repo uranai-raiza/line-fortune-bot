@@ -63,6 +63,13 @@
       <fieldset>
         <legend><span>04</span> 鑑定で聞きたいこと</legend>
         <p class="hint">{{ plan.label }}では、質問を{{ plan.questions }}つご入力ください。</p>
+        <div class="notice" role="note" aria-labelledby="refuse-title">
+          <p id="refuse-title"><strong>お受けできないご相談</strong></p>
+          <p>・医療・法律・投資などに関するご相談（病院・弁護士・専門家にご相談くださいね）<br>
+          ・ギャンブルの勝敗・結果に関するご相談<br>
+          ・生死に関わるご相談（病気の予後・寿命など）</p>
+          <p>鑑定はスピリチュアルな観点からのメッセージをお伝えするもので、特定の行動を強制・保証するものではございません。</p>
+        </div>
         {% for i in range(1, plan.questions + 1) %}<label>質問{{ i }}<textarea name="question_{{ i }}" rows="4" required>{{ values.get('question_' ~ i, '') }}</textarea></label>{% endfor %}
       </fieldset>
 

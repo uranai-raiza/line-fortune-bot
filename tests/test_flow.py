@@ -319,6 +319,11 @@ class FlowTests(unittest.TestCase):
     def test_input_template_contains_required_warning_and_fields(self):
         source = (ROOT / "templates" / "intake.html").read_text(encoding="utf-8")
         self.assertIn("記入漏れがある場合は鑑定を行うことができません", source)
+        # 質問を書く欄の上に、お受けできないご相談を出す
+        self.assertIn("お受けできないご相談", source)
+        self.assertLess(source.index("お受けできないご相談"), source.index('name="question_{{ i }}"'))
+        for word in ("医療・法律・投資", "ギャンブル", "生死に関わる"):
+            self.assertIn(word, source)
         for field in (
             "customer_name",
             "customer_birth_date",
