@@ -113,7 +113,7 @@ class FlowTests(unittest.TestCase):
         self.assertEqual(first.headers["Location"], "https://checkout.stripe.test/a")
         self.assertEqual(second.headers["Location"], "https://checkout.stripe.test/b")
         self.assertEqual(create.call_count, 2)
-        self.assertEqual(create.call_args.kwargs["line_items"][0]["price_data"]["unit_amount"], 6000)
+        self.assertEqual(create.call_args.kwargs["line_items"][0]["price_data"]["unit_amount"], 5000)
 
     def test_intake_shows_error_page_when_stripe_fails(self):
         error = app.stripe.error.APIConnectionError("network down")
@@ -185,19 +185,19 @@ class FlowTests(unittest.TestCase):
         self.assertIn("今の仕事を、このまま続けていいの？", step[1].text)
         self.assertEqual(step[2].original_content_url, "https://example.test/static/kanteisho-sample.jpg")
         self.assertEqual(step[2].preview_image_url, "https://example.test/static/kanteisho-sample-preview.jpg")
-        self.assertIn("プレミアム鑑定　6,000円", step[3].text)
+        self.assertIn("プレミアム鑑定　5,000円", step[3].text)
         self.assertIsNone(step[3].quick_reply)
         self.assertEqual(
             [action.label for action in step[4].template.actions],
-            ["お試し 980円", "スタンダード 2,000円", "プレミアム 6,000円", "今回はやめておきます"],
+            ["お試し 980円", "スタンダード 2,000円", "プレミアム 5,000円", "今回はやめておきます"],
         )
         self.assertLessEqual(len(step[4].template.text), 160)
 
     def test_premium_price_is_consistent(self):
-        self.assertEqual(PLANS["premium"]["amount"], 6000)
-        self.assertIn("プレミアム鑑定　6,000円", app.funnel.COURSE_TEXT)
+        self.assertEqual(PLANS["premium"]["amount"], 5000)
+        self.assertIn("プレミアム鑑定　5,000円", app.funnel.COURSE_TEXT)
         quick_reply = app.course_quick_reply("U1", "表示名")
-        self.assertEqual(quick_reply.items[2].action.label, "プレミアム 6,000円")
+        self.assertEqual(quick_reply.items[2].action.label, "プレミアム 5,000円")
         self.assertIn(3000, PLANS["premium"]["accepted_amounts"])
 
     def test_sheet_starts_with_requested_customer_columns(self):

@@ -85,7 +85,7 @@ class LineReplyTests(unittest.TestCase):
                 self.assertEqual(len(replies), 1)
                 buttons = replies[0][-1]
                 labels = [a.label for a in buttons.template.actions]
-                for course in ("お試し 980円", "スタンダード 2,000円", "プレミアム 6,000円"):
+                for course in ("お試し 980円", "スタンダード 2,000円", "プレミアム 5,000円"):
                     self.assertIn(course, labels)
                 self.assertEqual(pushes, [])  # 無料の返事だけ。ボットから自分で送る通数は使わない
 

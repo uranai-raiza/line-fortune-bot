@@ -359,7 +359,7 @@ def public_base_url():
 COURSE_LABELS = {
     "trial": "お試し 980円",
     "standard": "スタンダード 2,000円",
-    "premium": "プレミアム 6,000円",
+    "premium": "プレミアム 5,000円",
 }
 
 
@@ -392,7 +392,7 @@ def course_buttons(line_user_id, display_name, with_decline=False, with_birthdat
     if with_decline:
         actions.append(funnel.decline_action())
     return TemplateMessage(
-        alt_text="コースのご案内（お試し980円・スタンダード2,000円・プレミアム6,000円）",
+        alt_text="コースのご案内（お試し980円・スタンダード2,000円・プレミアム5,000円）",
         template=ButtonsTemplate(text=funnel.COURSE_BUTTONS_TEXT, actions=actions[:4]),
     )
 
