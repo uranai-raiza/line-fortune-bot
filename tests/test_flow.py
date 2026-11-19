@@ -183,8 +183,10 @@ class FlowTests(unittest.TestCase):
         self.assertEqual(len(step), 5)
         self.assertIn("この3ヶ月で146人の方に", step[0].text)
         self.assertIn("今の仕事を、このまま続けていいの？", step[1].text)
-        self.assertEqual(step[2].original_content_url, "https://example.test/static/kanteisho-sample.jpg")
-        self.assertEqual(step[2].preview_image_url, "https://example.test/static/kanteisho-sample-preview.jpg")
+        columns = step[2].template.columns
+        self.assertEqual([c.action.label for c in columns], ["鑑定書の見本", "お名前入りの護符", "運気暦の見本"])
+        self.assertEqual(columns[0].image_url, "https://example.test/static/carousel-kanteisho.jpg")
+        self.assertEqual(columns[2].action.uri, "https://example.test/static/carousel-koyomi.jpg")
         self.assertIn("プレミアム鑑定　5,000円", step[3].text)
         self.assertIsNone(step[3].quick_reply)
         self.assertEqual(
@@ -297,7 +299,7 @@ class FlowTests(unittest.TestCase):
         self.assertEqual(len(calls[0].args[0].messages), 5)
         retried = calls[1].args[0].messages
         self.assertEqual(len(retried), 4)
-        self.assertFalse(any(isinstance(m, app.ImageMessage) for m in retried))
+        self.assertFalse(any(app.is_image_message(m) for m in retried))
         self.assertEqual(len(retried[-1].template.actions), 4)
 
     def test_step2_texts_fit_line_limits(self):

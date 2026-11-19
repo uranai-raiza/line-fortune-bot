@@ -197,7 +197,8 @@ def theme_answers_text(theme):
         lines += [f"「{question}」", f"→ {answer}", ""]
     if theme == "お金":
         lines += ["（投資や借り入れの判断などの、具体的な指示はいたしません）", ""]
-    lines.append("実際の鑑定書は、こんな形でお届けしています👇")
+    lines.append("お届けする鑑定書と、コースによってお付けする護符・運気暦の見本です👇")
+    lines.append("横にめくって、押すと大きく見られますよ。")
     return "\n".join(lines)
 
 

@@ -20,6 +20,8 @@ from linebot.v3.messaging import (
     QuickReplyItem,
     TemplateMessage,
     ButtonsTemplate,
+    ImageCarouselTemplate,
+    ImageCarouselColumn,
     URIAction,
     PushMessageRequest,
 )
@@ -305,6 +307,28 @@ def build_fortune_message(zodiac, nickname, now=None):
 # どんな言い方のメッセージでも、行き止まりにしない。分からない言葉には、必ずこの返事とコースのボタンを出す。
 SAMPLE_IMAGE_PATH = "/static/kanteisho-sample.jpg"
 SAMPLE_PREVIEW_PATH = "/static/kanteisho-sample-preview.jpg"
+# 「続き」のあとに見せる見本（横にめくる絵の並び）。押すと大きい絵が開く。
+SAMPLE_CAROUSEL = [
+    ("/static/carousel-kanteisho.jpg", "鑑定書の見本"),
+    ("/static/carousel-gofu.jpg", "お名前入りの護符"),
+    ("/static/carousel-koyomi.jpg", "運気暦の見本"),
+]
+
+
+def sample_carousel(base_url):
+    return TemplateMessage(
+        alt_text="鑑定書・護符・運気暦の見本",
+        template=ImageCarouselTemplate(columns=[
+            ImageCarouselColumn(image_url=base_url + path, action=URIAction(label=label, uri=base_url + path))
+            for path, label in SAMPLE_CAROUSEL
+        ]),
+    )
+
+
+def is_image_message(message):
+    return isinstance(message, ImageMessage) or (
+        isinstance(message, TemplateMessage) and isinstance(message.template, ImageCarouselTemplate)
+    )
 
 
 def normalized_text(text):
@@ -437,10 +461,7 @@ def course_messages(line_user_id, nickname, profile):
     return [
         TextMessage(text=funnel.intro_text(nickname, zodiac)),
         TextMessage(text=funnel.theme_answers_text(theme)),
-        ImageMessage(
-            original_content_url=base_url + SAMPLE_IMAGE_PATH,
-            preview_image_url=base_url + SAMPLE_PREVIEW_PATH,
-        ),
+        sample_carousel(base_url),
         TextMessage(text=funnel.COURSE_TEXT),
         course_buttons(line_user_id, nickname, with_decline=True),
     ]
@@ -1241,7 +1262,7 @@ def _handle_message(event):
             )
         except Exception:
             # 画像が原因で返信に失敗したときは、画像を外した文章だけでもう一度返す。
-            text_only = [m for m in messages if not isinstance(m, ImageMessage)]
+            text_only = [m for m in messages if not is_image_message(m)]
             if len(text_only) == len(messages):
                 raise
             app.logger.exception("reply with sample image failed; retrying without image")
