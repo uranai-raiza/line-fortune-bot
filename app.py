@@ -311,7 +311,7 @@ SAMPLE_PREVIEW_PATH = "/static/kanteisho-sample-preview.jpg"
 SAMPLE_CAROUSEL = [
     ("/static/carousel-kanteisho.jpg", "鑑定書の見本"),
     ("/static/carousel-gofu.jpg", "お名前入りの護符"),
-    ("/static/carousel-koyomi.jpg", "運気カレンダーの見本"),
+    ("/static/carousel-calendar.jpg", "運気カレンダーの見本"),
 ]
 
 

@@ -186,7 +186,7 @@ class FlowTests(unittest.TestCase):
         columns = step[2].template.columns
         self.assertEqual([c.action.label for c in columns], ["鑑定書の見本", "お名前入りの護符", "運気カレンダーの見本"])
         self.assertEqual(columns[0].image_url, "https://example.test/static/carousel-kanteisho.jpg")
-        self.assertEqual(columns[2].action.uri, "https://example.test/static/carousel-koyomi.jpg")
+        self.assertEqual(columns[2].action.uri, "https://example.test/static/carousel-calendar.jpg")
         self.assertIn("プレミアム鑑定　5,000円", step[3].text)
         self.assertIsNone(step[3].quick_reply)
         self.assertEqual(
