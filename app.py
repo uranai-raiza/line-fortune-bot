@@ -362,6 +362,16 @@ COURSE_LABELS = {
     "premium": "プレミアム 5,000円",
 }
 
+PRODUCT_GUIDES = {
+    "gofu": "{name}さん🌙\nあなたのお名前を入れた、あなただけの護符をお作りしますね。\n恋愛成就・金運・開運の3つから選べますよ。\nスマホの待ち受けにも、印刷して財布に入れるカードにもお使いいただけます。\nお値段は500円です。下のボタンから、お申し込みくださいね🔮",
+    "calendar": "{name}さん🌙\nあなたの生年月日から、これからの1年の流れを読み解いた「運気暦」をお作りしますね。\n月ごとの運気、いい日と慎重な日、新月・満月と六曜まで、1年分のカレンダーにしてお届けします。\n恋愛・仕事・お金・家族・人間関係・これからの運勢から、テーマを1つ選べますよ。\nお値段は1,500円です。下のボタンから、お申し込みくださいね📅",
+}
+
+PRODUCT_BUTTON_LABELS = {
+    "gofu": "お名前入りの護符 500円",
+    "calendar": "運気暦 1,500円",
+}
+
 
 def course_quick_reply(line_user_id, display_name, only_course=None, with_decline=False, with_birthdate=False):
     token = create_checkout_token(line_user_id, display_name)
@@ -394,6 +404,22 @@ def course_buttons(line_user_id, display_name, with_decline=False, with_birthdat
     return TemplateMessage(
         alt_text="コースのご案内（お試し980円・スタンダード2,000円・プレミアム5,000円）",
         template=ButtonsTemplate(text=funnel.COURSE_BUTTONS_TEXT, actions=actions[:4]),
+    )
+
+
+def product_buttons(course, line_user_id, display_name):
+    """単体商品を、購入と見送りの縦2ボタンで案内する。"""
+    token = create_checkout_token(line_user_id, display_name)
+    uri = f"{public_base_url()}/checkout/start/{course}?token={token}"
+    return TemplateMessage(
+        alt_text=f"{PRODUCT_BUTTON_LABELS[course]}のご案内",
+        template=ButtonsTemplate(
+            text="ご希望を選んでくださいね。",
+            actions=[
+                URIAction(label=PRODUCT_BUTTON_LABELS[course], uri=uri),
+                funnel.decline_action(),
+            ],
+        ),
     )
 
 
@@ -730,13 +756,23 @@ def send_intake_guide(session):
     plan = PLANS[metadata["course"]]
     name = (metadata.get("line_display_name") or "").strip()
     greeting = f"{name}さん🌙" if name else "こんにちは🌙"
+    if plan["kind"] == "reading":
+        guidance = (
+            "鑑定に必要な内容を、下のページから入力してくださいね。\n"
+            f"{intake_url(session['id'])}\n\n"
+            "入力していただいた内容をもとに、星の動きと数秘術から丁寧に読み解いてまいります。"
+        )
+    else:
+        guidance = (
+            "制作に必要な内容を、下のページから入力してくださいね。\n"
+            f"{intake_url(session['id'])}\n\n"
+            "ご入力後、2〜5日でこのトークにお届けします。"
+        )
     message = (
         f"{greeting}\n"
         "お支払いありがとうございます。\n"
         f"{plan['label']}、確かに承りました。\n\n"
-        "鑑定に必要な内容を、下のページから入力してくださいね。\n"
-        f"{intake_url(session['id'])}\n\n"
-        "入力していただいた内容をもとに、星の動きと数秘術から丁寧に読み解いてまいります。\n"
+        f"{guidance}\n"
         "ページが開けないときは、このLINEでそのまま教えてもらえたらうれしいです。"
     )
     with ApiClient(configuration) as api_client:
@@ -778,7 +814,17 @@ INTAKE_FIELDS_FROM_ROW = [
 ]
 
 
-def intake_summary_from_form(form):
+def intake_summary_from_form(form, course=None):
+    if course == "gofu":
+        return f"お名前：{str(form.get('customer_name', '')).strip()}\n護符の種類：{str(form.get('gofu_type', '')).strip()}"
+    if course == "calendar":
+        return "\n".join([
+            f"お名前：{str(form.get('customer_name', '')).strip()}",
+            f"生年月日：{str(form.get('customer_birth_date', '')).strip()}",
+            f"出生時間：{str(form.get('customer_birth_time', '')).strip() or '不明'}",
+            f"出生地：{str(form.get('customer_birth_place', '')).strip() or '不明'}",
+            f"テーマ：{str(form.get('calendar_theme', '')).strip()}",
+        ])
     lines = [f"{label}：{str(form.get(key, '')).strip()}" for label, key in INTAKE_FIELDS_FROM_FORM]
     questions = [str(form.get(f"question_{i}", "")).strip() for i in range(1, 4)]
     questions = [q for q in questions if q]
@@ -796,14 +842,15 @@ def notify_admin(session_id, customer_name, course_label, summary="", note=""):
     if not admin_user_id:
         raise RuntimeError("ADMIN_LINE_USER_ID が設定されていません")
     message = (
-        "🔮 新しい鑑定依頼を受け付けました\n"
+        "🔮 新しいご依頼を受け付けました\n"
         + (f"{note}\n" if note else "")
         + f"\nコース：{course_label}\n"
         f"顧客名：{customer_name}\n\n"
         f"【入力の中身】\n{summary}\n\n"
         f"Stripe決済番号：\n{session_id}\n\n"
-        "WEBでお客様のホロスコープを取得してください。\n"
-        f"取得後、ホロスコープと顧客名「{customer_name}」をCodexに知らせて、鑑定書作成を依頼してください。"
+        + (("内容を確認し、商品を作成してください。") if course_label in (PLANS["gofu"]["label"], PLANS["calendar"]["label"]) else
+           ("WEBでお客様のホロスコープを取得してください。\n"
+            f"取得後、ホロスコープと顧客名「{customer_name}」をCodexに知らせて、鑑定書作成を依頼してください。"))
     )
     if len(message) > 4900:
         message = message[:4900] + "\n…（長いので途中まで。続きは鑑定管理シートを見てください）"
@@ -821,6 +868,7 @@ def intake():
         session = retrieve_paid_session(session_id)
         course = session["metadata"]["course"]
         plan = PLANS[course]
+        accepted_title = "鑑定情報を受け付けました" if plan["kind"] == "reading" else "お申し込み情報を受け付けました"
         store = SheetsStore()
         store.upsert_payment(session)
     except (RuntimeError, ValueError, stripe.error.StripeError) as exc:
@@ -896,12 +944,12 @@ def intake():
                 session_id=session_id,
             ), 400
 
-        error = validate_intake(request.form, plan["questions"])
+        error = validate_intake(request.form, plan["questions"], course)
         if not error:
-            summary = intake_summary_from_form(request.form)
+            summary = intake_summary_from_form(request.form, course)
             customer_name = request.form["customer_name"].strip()
             try:
-                created = store.save_intake(session_id, request.form)
+                created = store.save_intake(session_id, request.form, course)
             except Exception as exc:
                 # 台帳に書けなくても、入力の中身はオーナーのLINEに届ける（お客様の入力を失わない）
                 app.logger.exception("intake save failed session=%s", session_id)
@@ -913,7 +961,7 @@ def intake():
                                          session_id, summary)
                 return render_template(
                     "intake_complete.html",
-                    title="鑑定情報を受け付けました",
+                    title=accepted_title,
                     message="すべての入力が完了しました。LINEへ戻ってご連絡をお待ちくださいね。",
                     session_id=session_id,
                 )
@@ -932,7 +980,7 @@ def intake():
                 app.logger.exception("admin notify failed after intake session=%s", session_id)
             return render_template(
                 "intake_complete.html",
-                title="鑑定情報を受け付けました",
+                title=accepted_title,
                 message="すべての入力が完了しました。LINEへ戻ってご連絡をお待ちください。",
                 session_id=session_id,
             )
@@ -1108,6 +1156,18 @@ def _handle_message(event):
             # お支払い済みのお客様。占いや決まり文句を返さず、受け取ったことだけ伝えてオーナーに回す。
             forward_to_admin(nickname, line_user_id, text, active_orders)
             reply = TextMessage(text=RECEIPT_MESSAGE.format(nickname=nickname))
+
+        elif any(word in normalized_text(text) for word in ("護符", "ごふ", "お守り")):
+            reply = [
+                TextMessage(text=PRODUCT_GUIDES["gofu"].format(name=nickname)),
+                product_buttons("gofu", line_user_id, nickname),
+            ]
+
+        elif any(word in normalized_text(text) for word in ("カレンダー", "運気暦", "こよみ")):
+            reply = [
+                TextMessage(text=PRODUCT_GUIDES["calendar"].format(name=nickname)),
+                product_buttons("calendar", line_user_id, nickname),
+            ]
 
         elif is_consultation_submission(text):
             # 鑑定の情報らしい文。突き放さず受け取り、オーナーに回す。

@@ -30,6 +30,7 @@ CHECKOUT_NOTICE = """※20歳未満の方のご利用はお断りしておりま
 
 PLANS = {
     "trial": {
+        "kind": "reading",
         "label": "お試し鑑定", "checkout_name": "【初回限定】お試し星座占い鑑定",
         "amount": 980, "questions": 1, "characters": "約1,500文字",
         "description": """一つの悩みに絞り、今知るべき答えを占星術と数秘術から読み解きます。
@@ -40,6 +41,7 @@ PLANS = {
 まず一つだけ、迷いをはっきりさせたい方のための鑑定です。""",
     },
     "standard": {
+        "kind": "reading",
         "label": "スタンダード鑑定", "checkout_name": "【スタンダード】パーソナル星座鑑定",
         "amount": 2000, "questions": 2, "characters": "約2,500文字",
         "description": """恋愛・仕事・お金・人間関係など、今気になっている二つのお悩みを、占星術と数秘術から詳しく読み解きます。
@@ -52,6 +54,7 @@ PLANS = {
 二つのお悩みと次の一歩を、まとめて確かめたい方のための鑑定です。""",
     },
     "premium": {
+        "kind": "reading",
         "label": "プレミアム鑑定", "checkout_name": "【プレミアム】占星術×数秘術鑑定",
         "amount": 5000, "questions": 3, "characters": "約3,500文字",
         # 2026-11-18に3,000円→6,000円、2026-11-19に5,000円にした。前に開いた支払い画面で払った人も通す。
@@ -64,6 +67,16 @@ PLANS = {
 ご質問3つに、詳しくお答えします。
 1年の運気暦（カレンダー）と、お名前入りの護符をお付けします。
 これからの流れまで、しっかり知っておきたい方のための鑑定です。""",
+    },
+    "gofu": {
+        "kind": "gofu", "label": "お名前入りの護符", "checkout_name": "お名前入りの護符",
+        "amount": 500, "questions": 0,
+        "description": "お名前を入れた、恋愛成就・金運・開運のいずれかの護符です。2〜5日でこのトークにお届けします。",
+    },
+    "calendar": {
+        "kind": "calendar", "label": "運気暦（1年のカレンダー）", "checkout_name": "運気暦（1年のカレンダー）",
+        "amount": 1500, "questions": 0,
+        "description": "生年月日から1年の運気を読み解いた、月ごとの運気、いい日と慎重な日、新月・満月と六曜が分かるカレンダーです。2〜5日でこのトークにお届けします。",
     },
 }
 
@@ -186,6 +199,17 @@ def create_checkout_session(course, line_user_id, display_name, base_url):
     configure_stripe()
     plan = PLANS[course]
     reference = "RAIZA-" + datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
+    checkout_notice = CHECKOUT_NOTICE
+    if plan["kind"] != "reading":
+        checkout_notice = """※20歳未満の方のご利用はお断りしております。
+
+【ご注意事項】
+・お支払い確認後、制作を開始します
+・2〜5日でこのトークにお届けします
+・ご入力の送信後は返金・キャンセルをお受けできません
+・個人情報は商品の制作・お届け以外には使用しません
+
+🌟 お支払いをもって、上記注意事項すべてにご同意いただいたものとみなします。"""
     session = stripe.checkout.Session.create(
         mode="payment",
         line_items=[{
@@ -198,7 +222,7 @@ def create_checkout_session(course, line_user_id, display_name, base_url):
         }],
         custom_text={
             "submit": {
-                "message": "【ご利用前にご確認ください】\n" + CHECKOUT_NOTICE,
+                "message": "【ご利用前にご確認ください】\n" + checkout_notice,
             },
         },
         success_url=f"{base_url}/intake?session_id={{CHECKOUT_SESSION_ID}}",
@@ -378,7 +402,7 @@ class SheetsStore:
                 orders.append(dict(zip(SHEET_HEADERS, values)))
         return orders
 
-    def save_intake(self, session_id, data):
+    def save_intake(self, session_id, data, course=None):
         with self._lock:
             found = self.get_order(session_id)
             if not found:
@@ -386,22 +410,30 @@ class SheetsStore:
             row_number, current = found
             if current.get("鑑定情報入力状態") == "入力済み":
                 return False
+            if course is None:
+                course = next((key for key, plan in PLANS.items() if plan["label"] == current.get("コース")), "")
+            kind = PLANS.get(course, {}).get("kind", "reading")
             questions = [data.get(f"question_{i}", "").strip() for i in range(1, 4)]
             questions = [q for q in questions if q]
+            consultation = "\n".join(f"{i}. {q}" for i, q in enumerate(questions, 1))
+            if kind == "gofu":
+                consultation = f"護符の種類：{data.get('gofu_type', '').strip()}"
+            elif kind == "calendar":
+                consultation = f"運気暦のテーマ：{data.get('calendar_theme', '').strip()}"
             updates = {
                 "本人の名前": data["customer_name"].strip(),
-                "生年月日": data["customer_birth_date"].strip(),
-                "出生時間": data["customer_birth_time"].strip(),
-                "星座": data["customer_zodiac"].strip(),
-                "相手の名前": data["partner_name"].strip(),
-                "相手の生年月日": data["partner_birth_date"].strip(),
-                "相手の出生時間": data["partner_birth_time"].strip(),
-                "相手の星座": data["partner_zodiac"].strip(),
-                "現在の状況": data["situation"].strip(),
-                "相談内容": "\n".join(f"{i}. {q}" for i, q in enumerate(questions, 1)),
-                "本人の出生地": data["customer_birth_place"].strip(),
-                "相手の出生地": data["partner_birth_place"].strip(),
-                "現在の関係": data["relationship"].strip(),
+                "生年月日": data.get("customer_birth_date", "").strip(),
+                "出生時間": data.get("customer_birth_time", "").strip(),
+                "星座": data.get("customer_zodiac", "").strip(),
+                "相手の名前": data.get("partner_name", "").strip(),
+                "相手の生年月日": data.get("partner_birth_date", "").strip(),
+                "相手の出生時間": data.get("partner_birth_time", "").strip(),
+                "相手の星座": data.get("partner_zodiac", "").strip(),
+                "現在の状況": data.get("situation", "").strip(),
+                "相談内容": consultation,
+                "本人の出生地": data.get("customer_birth_place", "").strip(),
+                "相手の出生地": data.get("partner_birth_place", "").strip(),
+                "現在の関係": data.get("relationship", "").strip(),
                 "鑑定情報入力状態": "入力済み",
                 "入力日時": now_iso(),
                 "入力内容確認同意": "同意済み",
@@ -568,21 +600,33 @@ class StepProgressStore:
         self._write(line_user_id, {"見送りの理由": reason, "見送った日時": now_iso()})
 
 
-def validate_intake(form, question_count):
-    required = [
-        "customer_name",
-        "customer_birth_date",
-        "customer_birth_time",
-        "customer_birth_place",
-        "customer_zodiac",
-        "situation",
-        "consent_accuracy",
-        "consent_privacy",
-    ]
-    required += [f"question_{i}" for i in range(1, question_count + 1)]
+def validate_intake(form, question_count, course=None):
+    kind = PLANS.get(course, {}).get("kind", "reading")
+    if kind == "gofu":
+        required = ["customer_name", "gofu_type", "consent_accuracy", "consent_privacy"]
+    elif kind == "calendar":
+        required = ["customer_name", "customer_birth_date", "calendar_theme", "consent_accuracy", "consent_privacy"]
+    else:
+        required = [
+            "customer_name",
+            "customer_birth_date",
+            "customer_birth_time",
+            "customer_birth_place",
+            "customer_zodiac",
+            "situation",
+            "consent_accuracy",
+            "consent_privacy",
+        ]
+        required += [f"question_{i}" for i in range(1, question_count + 1)]
     missing = [field for field in required if not str(form.get(field, "")).strip()]
     if missing:
         return "未入力の項目があります。すべての項目を入力してください。"
+    if kind == "gofu" and form.get("gofu_type") not in ("恋愛成就", "金運", "開運"):
+        return "護符の種類を選択肢から選んでください。"
+    if kind == "calendar" and form.get("calendar_theme") not in (
+        "恋愛", "仕事", "お金", "家族", "人間関係", "これからの運勢",
+    ):
+        return "テーマを選択肢から選んでください。"
     for i in range(question_count + 1, 4):
         if str(form.get(f"question_{i}", "")).strip():
             return "購入コースの質問数を超えています。"
